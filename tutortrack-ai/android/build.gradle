@@ -1,0 +1,44 @@
+// Top-level build file where you can add configuration options common to all sub-projects/modules.
+
+buildscript {
+
+    // 🔒 Force a single Kotlin version across the entire project
+    ext {
+        kotlin_version = "1.8.22"
+    }
+
+    repositories {
+        google()
+        mavenCentral()
+    }
+
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.7.2'
+        classpath 'com.google.gms:google-services:4.4.2'
+        // NOTE: Do not place your application dependencies here; they belong
+        // in the individual module build.gradle files
+    }
+}
+
+apply from: "variables.gradle"
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+
+    // 🧠 This is the ACTUAL fix for the duplicate Kotlin class error
+    configurations.all {
+        resolutionStrategy {
+            force "org.jetbrains.kotlin:kotlin-stdlib:1.8.22"
+            force "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22"
+            force "org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.22"
+        }
+    }
+}
+
+// Clean task
+task clean(type: Delete) {
+    delete rootProject.buildDir
+}
