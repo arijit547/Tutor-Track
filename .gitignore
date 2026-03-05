@@ -1,0 +1,21 @@
+node_modules/
+dist/
+.DS_Store
+*.log
+.env
+.env.local
+
+# Android
+tutortrack-ai/android/.gradle/
+tutortrack-ai/android/build/
+tutortrack-ai/android/app/build/
+tutortrack-ai/android/local.properties
+tutortrack-ai/android/.idea/
+*.apk
+*.aab
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
