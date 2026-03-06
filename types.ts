@@ -24,6 +24,7 @@ export interface Session {
   durationMinutes: number;
   notes?: string;
   status: 'completed' | 'cancelled' | 'missed';
+  autoLogged?: boolean;
 }
 
 export interface Payment {
@@ -45,6 +46,11 @@ export interface Student {
   payments: Payment[];
   active: boolean;
   joinedDate: string;
+  location?: {
+    latitude: number;
+    longitude: number;
+    address?: string;
+  };
 }
 
 export type ViewState = 'dashboard' | 'students' | 'student-detail' | 'settings' | 'login' | 'register' | 'password-reset';

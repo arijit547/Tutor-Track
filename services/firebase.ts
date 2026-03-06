@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, connectAuthEmulator } from 'firebase/auth';
+import { initializeAuth, indexedDBLocalPersistence, connectAuthEmulator } from 'firebase/auth';
 import { getFirestore, connectFirestoreEmulator, initializeFirestore } from 'firebase/firestore';
 
 const firebaseConfig = {
@@ -28,7 +28,12 @@ let db: any;
 if (isFirebaseConfigured()) {
   try {
     app = initializeApp(firebaseConfig);
-    auth = getAuth(app);
+    
+    // Initialize auth with IndexedDB persistence for web and Capacitor compatibility
+    auth = initializeAuth(app, {
+      persistence: indexedDBLocalPersistence
+    });
+    
     db = initializeFirestore(app, {
       ignoreUndefinedProperties: true
     });

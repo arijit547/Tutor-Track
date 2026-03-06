@@ -42,12 +42,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // Listen to auth state changes
   useEffect(() => {
+    console.log('[AuthContext] Setting up auth listener');
     if (!isFirebaseConfigured() || !auth) {
+      console.log('[AuthContext] Firebase not configured, setting loading to false');
       setLoading(false);
       return;
     }
 
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
+      console.log('[AuthContext] onAuthStateChanged fired, user:', firebaseUser?.email || 'null');
       try {
         if (firebaseUser) {
           // Load user profile from Firestore
@@ -75,6 +78,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         console.error('Error loading user profile:', err);
         setError('Failed to load user profile');
       } finally {
+        console.log('[AuthContext] Setting loading to false');
         setLoading(false);
       }
     });

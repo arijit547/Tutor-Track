@@ -7,20 +7,27 @@ import { SessionModal } from './components/SessionModal';
 import { PaymentModal } from './components/PaymentModal';
 import { StudentFormModal } from './components/StudentFormModal';
 import { TutorProfile } from './components/TutorProfile';
+import { Button } from './components/Button';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { PasswordResetPage } from './pages/PasswordResetPage';
-import { GraduationCap, Bell, BellOff, CloudSync, AlertCircle, LogOut, Settings } from 'lucide-react';
+import { GraduationCap, Bell, BellOff, CloudSync, AlertCircle, LogOut, Settings, MapPin } from 'lucide-react';
 import { firebaseService } from './services/firebaseService';
 import { syncService } from './services/syncService';
 import { isFirebaseConfigured } from './services/firebase';
 import { useAuth } from './context/AuthContext';
+import { startLocationTracking, stopLocationTracking } from './services/locationService.browser'; // Browser-only, no plugins
+import { LocationDebugPanel } from './components/LocationDebugPanel';
+import { Capacitor } from '@capacitor/core';
+import { LocalNotifications } from '@capacitor/local-notifications';
 
 const STORAGE_KEY = 'tutortrack_data_v1';
 
 const App: React.FC = () => {
   // --- Auth State ---
   const { currentUser, loading: authLoading, logout } = useAuth();
+  console.log("authLoading:", authLoading, "currentUser:", currentUser);
+
 
   // --- State ---
   const [students, setStudents] = useState<Student[]>([]);
@@ -34,6 +41,7 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [pendingCount, setPendingCount] = useState(0);
+  const [locationTrackingEnabled, setLocationTrackingEnabled] = useState(false);
 
   // Modal States
   const [isSessionModalOpen, setIsSessionModalOpen] = useState(false);
@@ -46,6 +54,7 @@ const App: React.FC = () => {
 
   // Track notified sessions for the current session to avoid spamming
   const notifiedSessions = useRef<Set<string>>(new Set());
+  const [autoSessionPending, setAutoSessionPending] = useState<{ studentId: string; duration: number } | null>(null);
 
   // --- Effects ---
 
@@ -97,9 +106,19 @@ const App: React.FC = () => {
 
     loadData();
 
-    if (Notification.permission === 'granted') {
-      setNotificationsEnabled(true);
-    }
+    const checkPromises = async () => {
+      if (Capacitor.isNativePlatform()) {
+        const { display } = await LocalNotifications.checkPermissions();
+        if (display === 'granted') {
+          setNotificationsEnabled(true);
+        }
+      } else {
+        if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+          setNotificationsEnabled(true);
+        }
+      }
+    };
+    checkPromises();
   }, [currentUser]);
 
   // Save data on change (localStorage + Firebase sync)
@@ -167,10 +186,26 @@ const App: React.FC = () => {
 
           // Notify if within 30 mins AND not yet notified today
           if (diffMins > 0 && diffMins <= 30 && !notifiedSessions.current.has(sessionKey)) {
-            new Notification(`Upcoming Tuition: ${student.name}`, {
-              body: `Session starts in ${Math.round(diffMins)} minutes (${student.scheduleTime}). Subject: ${student.subject}`,
-              icon: '/favicon.ico' // Fallback icon
-            });
+            const title = `Upcoming Tuition: ${student.name}`;
+            const body = `Session starts in ${Math.round(diffMins)} minutes (${student.scheduleTime}). Subject: ${student.subject}`;
+
+            if (Capacitor.isNativePlatform()) {
+              LocalNotifications.schedule({
+                notifications: [
+                  {
+                    title,
+                    body,
+                    id: new Date().getTime(),
+                    schedule: { at: new Date() }, // Fire immediately
+                  }
+                ]
+              });
+            } else if ('Notification' in window) {
+              new Notification(title, {
+                body,
+                icon: '/favicon.ico' // Fallback icon
+              });
+            }
 
             notifiedSessions.current.add(sessionKey);
           }
@@ -186,6 +221,19 @@ const App: React.FC = () => {
     return () => clearInterval(interval);
   }, [students, notificationsEnabled]);
 
+  // Location Tracking for Auto Sessions
+  useEffect(() => {
+    if (!locationTrackingEnabled || !currentUser) return;
+
+    startLocationTracking(students, (studentId, duration) => {
+      setAutoSessionPending({ studentId, duration });
+    });
+
+    return () => {
+      stopLocationTracking();
+    };
+  }, [locationTrackingEnabled, students, currentUser]);
+
   // --- Handlers ---
 
   const handleNavigateToStudent = (id: string) => {
@@ -199,16 +247,55 @@ const App: React.FC = () => {
   };
 
   const requestNotificationPermission = async () => {
-    if (!("Notification" in window)) {
-      alert("This browser does not support desktop notifications");
-      return;
-    }
+    if (Capacitor.isNativePlatform()) {
+      let permStatus = await LocalNotifications.checkPermissions();
+      
+      if (permStatus.display === 'prompt') {
+        permStatus = await LocalNotifications.requestPermissions();
+      }
 
-    const permission = await Notification.requestPermission();
-    if (permission === "granted") {
+      if (permStatus.display !== 'granted') {
+        alert("Push notification permission denied.");
+        return;
+      }
+      
       setNotificationsEnabled(true);
-      new Notification("Notifications Enabled", { body: "You will be reminded 30 minutes before classes." });
+      await LocalNotifications.schedule({
+        notifications: [
+          {
+            title: "Notifications Enabled",
+            body: "You will be reminded 30 minutes before classes.",
+            id: new Date().getTime(),
+            schedule: { at: new Date() }, // Fire immediately
+          }
+        ]
+      });
+    } else {
+      if (!("Notification" in window)) {
+        alert("This browser does not support desktop notifications");
+        return;
+      }
+
+      const permission = await Notification.requestPermission();
+      if (permission === "granted") {
+        setNotificationsEnabled(true);
+        new Notification("Notifications Enabled", { body: "You will be reminded 30 minutes before classes." });
+      }
     }
+  };
+
+  const toggleLocationTracking = () => {
+    setLocationTrackingEnabled(!locationTrackingEnabled);
+  };
+
+  const confirmAutoSession = () => {
+    if (!autoSessionPending) return;
+    openSessionModal(autoSessionPending.studentId);
+    setAutoSessionPending(null);
+  };
+
+  const dismissAutoSession = () => {
+    setAutoSessionPending(null);
   };
 
   // Session Logging
@@ -493,6 +580,17 @@ const App: React.FC = () => {
                     {notificationsEnabled ? <Bell className="w-5 h-5" /> : <BellOff className="w-5 h-5" />}
                   </button>
 
+                  <button
+                    onClick={toggleLocationTracking}
+                    className={`p-2 rounded-full transition-colors relative ${locationTrackingEnabled ? 'text-green-600 bg-green-50' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'}`}
+                    title={locationTrackingEnabled ? "Auto-Session Tracking Active" : "Enable Auto-Session Tracking"}
+                  >
+                    <MapPin className="w-5 h-5" />
+                    {locationTrackingEnabled && (
+                      <span className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full animate-pulse"></span>
+                    )}
+                  </button>
+
                   {/* User Info and Logout */}
                   <div className="flex items-center gap-4">
                     <div className="flex items-center flex-col text-right hidden sm:flex">
@@ -524,6 +622,34 @@ const App: React.FC = () => {
 
           {/* Main Content */}
           <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            {/* Debug Panel - Remove in production */}
+            {locationTrackingEnabled && (
+              <div className="mb-6">
+                <LocationDebugPanel students={students} isTracking={locationTrackingEnabled} />
+              </div>
+            )}
+
+            {/* Auto Session Notification Banner */}
+            {autoSessionPending && (
+              <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <MapPin className="w-5 h-5 text-green-600" />
+                  <div>
+                    <p className="font-medium text-green-900">
+                      Session Detected: {students.find(s => s.id === autoSessionPending.studentId)?.name}
+                    </p>
+                    <p className="text-sm text-green-700">
+                      {autoSessionPending.duration} minutes at tuition location
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button onClick={confirmAutoSession} size="sm">Log Session</Button>
+                  <Button onClick={dismissAutoSession} variant="ghost" size="sm">Dismiss</Button>
+                </div>
+              </div>
+            )}
+
             {currentView === 'dashboard' && (
               <Dashboard
                 students={students}
