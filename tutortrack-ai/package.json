@@ -12,6 +12,7 @@
     "@capacitor/android": "^8.1.0",
     "@capacitor/cli": "^7.5.0",
     "@capacitor/core": "^8.1.0",
+    "@capacitor/local-notifications": "^8.0.1",
     "@capacitor/preferences": "^8.0.1",
     "@capacitor/push-notifications": "^8.0.1",
     "firebase": "^10.7.2",

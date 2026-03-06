@@ -18,6 +18,8 @@ import { isFirebaseConfigured } from './services/firebase';
 import { useAuth } from './context/AuthContext';
 import { startLocationTracking, stopLocationTracking } from './services/locationService.browser'; // Browser-only, no plugins
 import { LocationDebugPanel } from './components/LocationDebugPanel';
+import { Capacitor } from '@capacitor/core';
+import { LocalNotifications } from '@capacitor/local-notifications';
 
 const STORAGE_KEY = 'tutortrack_data_v1';
 
@@ -104,9 +106,19 @@ const App: React.FC = () => {
 
     loadData();
 
-    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-      setNotificationsEnabled(true);
-    }
+    const checkPromises = async () => {
+      if (Capacitor.isNativePlatform()) {
+        const { display } = await LocalNotifications.checkPermissions();
+        if (display === 'granted') {
+          setNotificationsEnabled(true);
+        }
+      } else {
+        if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+          setNotificationsEnabled(true);
+        }
+      }
+    };
+    checkPromises();
   }, [currentUser]);
 
   // Save data on change (localStorage + Firebase sync)
@@ -174,9 +186,23 @@ const App: React.FC = () => {
 
           // Notify if within 30 mins AND not yet notified today
           if (diffMins > 0 && diffMins <= 30 && !notifiedSessions.current.has(sessionKey)) {
-            if ('Notification' in window) {
-              new Notification(`Upcoming Tuition: ${student.name}`, {
-                body: `Session starts in ${Math.round(diffMins)} minutes (${student.scheduleTime}). Subject: ${student.subject}`,
+            const title = `Upcoming Tuition: ${student.name}`;
+            const body = `Session starts in ${Math.round(diffMins)} minutes (${student.scheduleTime}). Subject: ${student.subject}`;
+
+            if (Capacitor.isNativePlatform()) {
+              LocalNotifications.schedule({
+                notifications: [
+                  {
+                    title,
+                    body,
+                    id: new Date().getTime(),
+                    schedule: { at: new Date() }, // Fire immediately
+                  }
+                ]
+              });
+            } else if ('Notification' in window) {
+              new Notification(title, {
+                body,
                 icon: '/favicon.ico' // Fallback icon
               });
             }
@@ -221,15 +247,40 @@ const App: React.FC = () => {
   };
 
   const requestNotificationPermission = async () => {
-    if (!("Notification" in window)) {
-      alert("This browser does not support desktop notifications");
-      return;
-    }
+    if (Capacitor.isNativePlatform()) {
+      let permStatus = await LocalNotifications.checkPermissions();
+      
+      if (permStatus.display === 'prompt') {
+        permStatus = await LocalNotifications.requestPermissions();
+      }
 
-    const permission = await Notification.requestPermission();
-    if (permission === "granted") {
+      if (permStatus.display !== 'granted') {
+        alert("Push notification permission denied.");
+        return;
+      }
+      
       setNotificationsEnabled(true);
-      new Notification("Notifications Enabled", { body: "You will be reminded 30 minutes before classes." });
+      await LocalNotifications.schedule({
+        notifications: [
+          {
+            title: "Notifications Enabled",
+            body: "You will be reminded 30 minutes before classes.",
+            id: new Date().getTime(),
+            schedule: { at: new Date() }, // Fire immediately
+          }
+        ]
+      });
+    } else {
+      if (!("Notification" in window)) {
+        alert("This browser does not support desktop notifications");
+        return;
+      }
+
+      const permission = await Notification.requestPermission();
+      if (permission === "granted") {
+        setNotificationsEnabled(true);
+        new Notification("Notifications Enabled", { body: "You will be reminded 30 minutes before classes." });
+      }
     }
   };
 

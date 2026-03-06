@@ -68,6 +68,7 @@ export const firebaseService = {
           email: studentData.email,
           active: studentData.active,
           joinedDate: studentData.joinedDate,
+          location: studentData.location,
           sessions,
           payments,
         });
@@ -413,8 +414,9 @@ export const firebaseService = {
           updatedAt: Timestamp.now(),
         };
 
-        // Only include email if defined
+        // Only include optional fields if defined
         if (student.email) studentData.email = student.email;
+        if (student.location) studentData.location = student.location;
 
         await setDoc(studentRef, studentData);
 
