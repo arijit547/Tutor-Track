@@ -1,7 +1,0 @@
-<?xml version='1.0' encoding='utf-8'?>
-<resources>
-    <string name="app_name">Tutor Track</string>
-    <string name="title_activity_main">Tutor Track</string>
-    <string name="package_name">com.arijit.tutortrack.app</string>
-    <string name="custom_url_scheme">com.arijit.tutortrack.app</string>
-</resources>
