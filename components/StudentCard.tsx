@@ -2,6 +2,7 @@ import React from 'react';
 import { Student } from '../types';
 import { CalendarDays, Clock3, WalletCards, ArrowUpRight } from 'lucide-react';
 import { Button } from './Button';
+import { getStudentBilling, monthlyRateLabel } from '../services/studentBilling';
 
 interface StudentCardProps {
   student: Student;
@@ -10,11 +11,9 @@ interface StudentCardProps {
 }
 
 export const StudentCard: React.FC<StudentCardProps> = ({ student, onView, onLogSession }) => {
-  const billableSessions = student.sessions.filter(s => s.status === 'completed' || s.status === 'missed').length;
-  const completedSessions = student.sessions.filter(s => s.status === 'completed').length;
-  const totalDue = billableSessions * student.ratePerSession;
-  const totalPaid = student.payments.reduce((sum, p) => sum + p.amount, 0);
-  const balance = Math.max(0, totalDue - totalPaid);
+  const billing = getStudentBilling(student);
+  const completedSessions = billing.completedSessions;
+  const balance = billing.outstanding;
   const initials = student.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
 
   return (
@@ -48,7 +47,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({ student, onView, onLog
 
       <div className="mt-4 flex items-center justify-between text-xs text-[#7f7c8e]">
         <span className="inline-flex items-center gap-1.5"><Clock3 className="w-3.5 h-3.5" /> {completedSessions} completed</span>
-        <span>৳{student.ratePerSession.toLocaleString()}/session</span>
+        <span>{monthlyRateLabel(student)}</span>
       </div>
 
       <div className="mt-5 flex gap-2.5">

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Student } from '../types';
 import { Button } from './Button';
+import { getStudentBilling, monthlyRateLabel } from '../services/studentBilling';
 import { ArrowLeft, Plus, CheckCircle2, XCircle, AlertCircle, WalletCards, Pencil, Trash2, CalendarDays, Clock3, Mail, CircleDollarSign } from 'lucide-react';
 
 interface StudentDetailProps {
@@ -15,11 +16,11 @@ interface StudentDetailProps {
 export const StudentDetail: React.FC<StudentDetailProps> = ({ student, onBack, onLogSession, onLogPayment, onEditStudent, onDeleteStudent }) => {
   const [activeTab, setActiveTab] = useState<'sessions' | 'payments'>('sessions');
 
-  const billableSessions = student.sessions.filter(s => s.status === 'completed' || s.status === 'missed').length;
-  const completedSessions = student.sessions.filter(s => s.status === 'completed').length;
-  const totalDue = billableSessions * student.ratePerSession;
-  const totalPaid = student.payments.reduce((sum, p) => sum + p.amount, 0);
-  const balance = Math.max(0, totalDue - totalPaid);
+  const billing = getStudentBilling(student);
+  const completedSessions = billing.completedSessions;
+  const totalDue = billing.earned;
+  const totalPaid = billing.paid;
+  const balance = billing.outstanding;
   const initials = student.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
 
   return (
@@ -36,7 +37,7 @@ export const StudentDetail: React.FC<StudentDetailProps> = ({ student, onBack, o
                   <h1 className="text-2xl font-extrabold tracking-[-.04em] text-[#29283f]">{student.name}</h1>
                   <span className={`px-2.5 py-1 rounded-full text-[10px] uppercase tracking-[.08em] font-extrabold ${student.active ? 'bg-[#edf7f1] text-[#397d5c]' : 'bg-[#f0eef1] text-[#777481]'}`}>{student.active ? 'Active' : 'Inactive'}</span>
                 </div>
-                <p className="mt-1 text-sm text-[#807d8c]">{student.subject} · ৳{student.ratePerSession.toLocaleString()} per session</p>
+                <p className="mt-1 text-sm text-[#807d8c]">{student.subject} · {monthlyRateLabel(student)}</p>
                 <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs text-[#7d7a89]">
                   <span className="inline-flex items-center gap-1.5"><CalendarDays className="w-3.5 h-3.5 text-[#69659b]" /> {student.scheduleDays.join(' · ')}</span>
                   <span className="inline-flex items-center gap-1.5"><Clock3 className="w-3.5 h-3.5 text-[#69659b]" /> {student.scheduleTime}</span>
@@ -68,6 +69,20 @@ export const StudentDetail: React.FC<StudentDetailProps> = ({ student, onBack, o
           ))}
         </div>
       </section>
+
+      {billing.currentMode !== 'legacy' && (
+        <div className="tt-card rounded-[22px] px-5 py-4 border border-[#e7e2d9] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <p className="text-xs font-extrabold text-[#39354c]">Current month's billing</p>
+            <p className="mt-1 text-xs text-[#817c8a]">
+              {billing.currentMode === 'session-target'
+                ? `${billing.currentMonthSessions} of ${billing.currentMonthTarget} completed sessions · ${billing.currentMonthComplete ? 'Monthly target reached' : 'In progress'}`
+                : `${billing.currentMonthSessions} sessions recorded · Monthly fee becomes due after month-end`}
+            </p>
+          </div>
+          <p className="text-lg font-extrabold text-[#4e4a82]">৳{billing.currentMonthEarned.toLocaleString('en-BD', { maximumFractionDigits: 2 })} billed this month</p>
+        </div>
+      )}
 
       <section className="tt-card rounded-[24px] overflow-hidden">
         <div className="px-4 sm:px-6 pt-4 border-b border-[#ece9e3] flex gap-6">

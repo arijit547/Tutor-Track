@@ -34,13 +34,31 @@ export interface Payment {
   notes?: string;
 }
 
+export type BillingMode = 'session-target' | 'calendar-month';
+
+export interface MonthlyBillingPlan {
+  // A contract version starts on the first day of its effective calendar month.
+  effectiveMonth: string; // YYYY-MM
+  monthlySalary: number;
+  billingMode: BillingMode;
+  sessionsPerMonth?: number; // Required in session-target mode; optional planning estimate otherwise.
+}
+
 export interface Student {
   id: string;
   name: string;
   subject: string;
   scheduleDays: DayOfWeek[];
   scheduleTime: string; // Format "HH:MM" 24h
-  ratePerSession: number;
+  ratePerSession: number; // Legacy compatibility / estimated rate, not authoritative for monthly plans.
+  legacyRatePerSession?: number; // Preserve historical billing when converting an existing student.
+  monthlySalary?: number;
+  billingMode?: BillingMode;
+  sessionsPerMonth?: number;
+  billingStartDate?: string; // YYYY-MM-DD. The first month is billed in full, without proration.
+  billingPlans?: MonthlyBillingPlan[];
+  billingPausedMonths?: string[];
+  billingPausedFromMonth?: string;
   email?: string;
   sessions: Session[];
   payments: Payment[];

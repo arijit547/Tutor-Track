@@ -23,6 +23,7 @@ import { LocalNotifications } from '@capacitor/local-notifications';
 import { BrandLogo } from './components/BrandLogo';
 import { DashboardSkeleton } from './components/DashboardSkeleton';
 import { PersonalFinance } from './components/PersonalFinance';
+import { getStudentBilling } from './services/studentBilling';
 
 const STORAGE_KEY = 'tutortrack_data_v1';
 
@@ -496,10 +497,7 @@ const App: React.FC = () => {
   // Calculate outstanding for payment modal default
   const getOutstandingBalance = (student?: Student) => {
     if (!student) return 0;
-    const totalSessions = student.sessions.filter(s => s.status === 'completed' || s.status === 'missed').length;
-    const totalDue = totalSessions * student.ratePerSession;
-    const totalPaid = student.payments.reduce((sum, p) => sum + p.amount, 0);
-    return Math.max(0, totalDue - totalPaid);
+    return getStudentBilling(student).outstanding;
   };
 
   return (
