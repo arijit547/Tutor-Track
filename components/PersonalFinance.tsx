@@ -132,7 +132,7 @@ const SpendingDonut: React.FC<{ categories: Array<[string, number]>; total: numb
   return <div className="grid grid-cols-1 sm:grid-cols-[220px_minmax(0,1fr)] items-center gap-4 sm:gap-7">
     <div className="w-full max-w-[240px] mx-auto">
       <svg viewBox="0 0 240 240" className="w-full" role="img" aria-label="Expense share by category donut chart">
-        <circle cx="120" cy="120" r="72" stroke="#eeecf2" strokeWidth="24" fill="none"/>
+        <circle cx="120" cy="120" r="72" stroke="#3684e4" strokeWidth="24" fill="none"/>
         {segments.map(segment => <circle key={segment.category} cx="120" cy="120" r="72" fill="none" stroke={EXPENSE_COLORS[segment.index % EXPENSE_COLORS.length]}
           strokeWidth={activeIndex === segment.index ? 29 : 24} strokeDasharray={`${Math.max(0, segment.fraction * circumference - 3)} ${circumference}`} strokeDashoffset={-segment.start * circumference} transform="rotate(-90 120 120)"
           className="cursor-pointer transition-all duration-300" role="button" tabIndex={0} aria-label={`${segment.category}, ${money(segment.amount)}`}
