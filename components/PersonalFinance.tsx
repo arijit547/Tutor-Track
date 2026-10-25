@@ -21,6 +21,200 @@ const monthTitle = (month: string) => new Date(`${month}-01T12:00:00`).toLocaleD
 
 type DisplayEntry = Pick<FinanceTransaction, 'id' | 'date' | 'type' | 'category' | 'amount' | 'note'> & { source: 'personal' | 'tuition' };
 
+// These lightweight SVG visualizations deliberately require no charting dependency.
+// They use the same transaction records as the rest of the Finance page.
+type TrendPoint = { key: string; label: string; income: number; expenses: number };
+const shortMoney = (amount: number) => `৳${new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(amount)}`;
+const monthKeysEndingAt = (endMonth: string, count: number) => {
+  const [year, monthNumber] = endMonth.split('-').map(Number);
+  return Array.from({ length: count }, (_, i) => {
+    const date = new Date(year, monthNumber - count + i, 1);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+  });
+};
+
+const CashFlowChart: React.FC<{ data: TrendPoint[] }> = ({ data }) => {
+  const [selected, setSelected] = useState(data.length - 1);
+  const chartId = React.useId().replace(/:/g, '');
+  const lastIndex = data.length - 1;
+  const activeIndex = Math.max(0, Math.min(selected, lastIndex));
+  const active = data[activeIndex];
+  const hasActivity = data.some(point => point.income > 0 || point.expenses > 0);
+  const maxValue = Math.max(1, ...data.flatMap(point => [point.income, point.expenses]));
+  const left = 55, right = 705, top = 20, bottom = 212;
+  const x = (index: number) => left + (right - left) * (index / Math.max(1, lastIndex));
+  const y = (value: number) => bottom - (value / (maxValue * 1.13)) * (bottom - top);
+  const makeLine = (points: Array<{ x: number; y: number }>) => points.map((point, i) => {
+    if (!i) return `M ${point.x} ${point.y}`;
+    const prev = points[i - 1];
+    const mid = (prev.x + point.x) / 2;
+    return `C ${mid} ${prev.y} ${mid} ${point.y} ${point.x} ${point.y}`;
+  }).join(' ');
+  const incomePoints = data.map((point, i) => ({ x: x(i), y: y(point.income) }));
+  const expensePoints = data.map((point, i) => ({ x: x(i), y: y(point.expenses) }));
+  const incomeLine = makeLine(incomePoints);
+  const expenseLine = makeLine(expensePoints);
+  const toArea = (line: string) => `${line} L ${right} ${bottom} L ${left} ${bottom} Z`;
+
+  if (!hasActivity) {
+    return <div className="h-[210px] grid place-items-center rounded-2xl border border-dashed border-[#e4e0ec] bg-[#faf9fc] text-center px-4">
+      <div><p className="text-sm font-bold text-[#514e6c]">Your financial story starts here</p><p className="text-xs text-[#9893a5] mt-1">Record income or an expense to see your trend.</p></div>
+    </div>;
+  }
+  return <div className="min-w-0">
+    <svg viewBox="0 0 740 246" className="w-full h-auto" role="img" aria-label="Monthly income and expenses trend chart">
+      <defs>
+        <linearGradient id={`finance-income-${chartId}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#4a9d87" stopOpacity=".24"/><stop offset="100%" stopColor="#4a9d87" stopOpacity="0"/></linearGradient>
+        <linearGradient id={`finance-expense-${chartId}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#e1a07c" stopOpacity=".14"/><stop offset="100%" stopColor="#e1a07c" stopOpacity="0"/></linearGradient>
+      </defs>
+      {[0, .25, .5, .75, 1].map(frac => <g key={frac}>
+        <line x1={left} x2={right} y1={y(maxValue * 1.13 * frac)} y2={y(maxValue * 1.13 * frac)} stroke="#eeeaf1" strokeDasharray={frac === 0 ? undefined : '4 7'} />
+        <text x={left - 10} y={y(maxValue * 1.13 * frac) + 4} textAnchor="end" fontSize="11" fill="#a39eac">{shortMoney(maxValue * 1.13 * frac)}</text>
+      </g>)}
+      <path d={toArea(incomeLine)} fill={`url(#finance-income-${chartId})`}/>
+      <path d={toArea(expenseLine)} fill={`url(#finance-expense-${chartId})`}/>
+      <path d={incomeLine} fill="none" stroke="#469b80" strokeWidth="3.5" strokeLinecap="round"/>
+      <path d={expenseLine} fill="none" stroke="#df9876" strokeWidth="3" strokeLinecap="round"/>
+      {active && <g>
+        <line x1={x(activeIndex)} x2={x(activeIndex)} y1={top} y2={bottom} stroke="#c8c0d5" strokeDasharray="5 5" strokeWidth="1.5"/>
+        <circle cx={x(activeIndex)} cy={y(active.income)} r="6" fill="#469b80" stroke="white" strokeWidth="3" />
+        <circle cx={x(activeIndex)} cy={y(active.expenses)} r="6" fill="#df9876" stroke="white" strokeWidth="3" />
+      </g>}
+      {data.map((point, index) => <g key={point.key}>
+        <text x={x(index)} y="238" textAnchor="middle" fontSize="11" fill="#8e899c">{data.length > 6 && index % 2 === 1 && index !== lastIndex ? '' : point.label}</text>
+        <rect x={x(index) - (right - left) / data.length / 2} y={top} width={(right - left) / data.length} height={bottom - top} fill="transparent"
+          role="button" tabIndex={0} aria-label={`${point.key}: income ${money(point.income)}, expenses ${money(point.expenses)}`}
+          onMouseEnter={() => setSelected(index)} onFocus={() => setSelected(index)} onClick={() => setSelected(index)}
+          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelected(index); } }} />
+      </g>)}
+    </svg>
+    {active && <div aria-live="polite" className="rounded-2xl bg-[#f7f6f9] px-4 py-3 flex flex-wrap items-center justify-between gap-x-5 gap-y-2">
+      <span className="font-extrabold text-sm text-[#494562]">{new Date(`${active.key}-01T12:00:00`).toLocaleDateString('en-BD', { month: 'long', year: 'numeric' })}</span>
+      <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs font-bold">
+        <span className="text-[#38846c]"><span aria-hidden="true">● </span>Income {money(active.income)}</span>
+        <span className="text-[#bd775a]"><span aria-hidden="true">● </span>Expenses {money(active.expenses)}</span>
+      </div>
+    </div>}
+  </div>;
+};
+
+const BudgetGauge: React.FC<{ amount: number; limit: number }> = ({ amount, limit }) => {
+  const ratio = limit > 0 ? amount / limit : 0;
+  const percent = ratio * 100;
+  const over = ratio > 1;
+  const path = 'M 25 120 A 95 95 0 0 1 215 120';
+  return <div className="relative mx-auto w-full max-w-[260px]">
+    <svg viewBox="0 0 240 148" className="w-full" role="progressbar" aria-label="Monthly spending budget used" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.min(100, Math.round(percent))} aria-valuetext={`${Math.round(percent)} percent of budget used`}>
+      <path d={path} fill="none" stroke="#ece9f1" strokeWidth="19" strokeLinecap="round" />
+      <path d={path} fill="none" stroke={over ? '#c86e61' : '#6760aa'} strokeWidth="19" strokeLinecap="round" pathLength={100} strokeDasharray={`${Math.min(100, Math.max(0, percent))} 100`} className="transition-all duration-500" />
+      <text x="120" y="99" textAnchor="middle" fontSize="35" fontWeight="800" fill={over ? '#b75c50' : '#33314c'}>{Math.round(percent)}%</text>
+      <text x="120" y="121" textAnchor="middle" fontSize="11" fontWeight="700" fill="#928c9c">{over ? 'Over budget' : 'Budget used'}</text>
+    </svg>
+  </div>;
+};
+
+const EXPENSE_COLORS = ['#655fa6', '#e9ac70', '#55a48b', '#df8f7b', '#87a6c1', '#c0a4c7'];
+const SpendingDonut: React.FC<{ categories: Array<[string, number]>; total: number }> = ({ categories, total }) => {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const shown = categories.length <= 6 ? categories : [
+    ...categories.slice(0, 5),
+    ['Other categories', categories.slice(5).reduce((sum, [, amount]) => sum + amount, 0)] as [string, number],
+  ];
+  const chosen = shown[Math.min(activeIndex, Math.max(0, shown.length - 1))];
+  const circumference = 2 * Math.PI * 72;
+  let used = 0;
+  const segments = shown.map(([category, amount], index) => {
+    const fraction = total > 0 ? amount / total : 0;
+    const segment = { category, amount, index, start: used, fraction };
+    used += fraction;
+    return segment;
+  });
+  return <div className="grid grid-cols-1 sm:grid-cols-[220px_minmax(0,1fr)] items-center gap-4 sm:gap-7">
+    <div className="w-full max-w-[240px] mx-auto">
+      <svg viewBox="0 0 240 240" className="w-full" role="img" aria-label="Expense share by category donut chart">
+        <circle cx="120" cy="120" r="72" stroke="#eeecf2" strokeWidth="24" fill="none"/>
+        {segments.map(segment => <circle key={segment.category} cx="120" cy="120" r="72" fill="none" stroke={EXPENSE_COLORS[segment.index % EXPENSE_COLORS.length]}
+          strokeWidth={activeIndex === segment.index ? 29 : 24} strokeDasharray={`${Math.max(0, segment.fraction * circumference - 3)} ${circumference}`} strokeDashoffset={-segment.start * circumference} transform="rotate(-90 120 120)"
+          className="cursor-pointer transition-all duration-300" role="button" tabIndex={0} aria-label={`${segment.category}, ${money(segment.amount)}`}
+          onMouseEnter={() => setActiveIndex(segment.index)} onFocus={() => setActiveIndex(segment.index)} onClick={() => setActiveIndex(segment.index)}
+          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActiveIndex(segment.index); } }}>
+          <title>{`${segment.category}: ${money(segment.amount)}`}</title>
+        </circle>)}
+        <text x="120" y="110" textAnchor="middle" fontSize="12" fontWeight="700" fill="#8d8698">{chosen?.[0] ?? 'Expenses'}</text>
+        <text x="120" y="139" textAnchor="middle" fontSize="20" fontWeight="800" fill="#34324e">{money(chosen?.[1] ?? 0)}</text>
+        <text x="120" y="158" textAnchor="middle" fontSize="12" fontWeight="700" fill="#827d96">{total > 0 ? Math.round(((chosen?.[1] ?? 0) / total) * 100) : 0}% of total</text>
+      </svg>
+    </div>
+    <div className="grid grid-cols-1 gap-1.5 min-w-0">
+      {segments.map(segment => <button key={segment.category} type="button" onFocus={() => setActiveIndex(segment.index)} onMouseEnter={() => setActiveIndex(segment.index)} onClick={() => setActiveIndex(segment.index)}
+        className={`rounded-xl flex gap-3 items-center justify-between text-left px-3 py-2.5 transition-colors ${activeIndex === segment.index ? 'bg-[#f4f2fa]' : 'hover:bg-[#faf9fc]'}`}>
+        <span className="min-w-0 flex items-center gap-2 text-xs font-bold text-[#666076]"><span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: EXPENSE_COLORS[segment.index % EXPENSE_COLORS.length] }} /><span className="truncate">{segment.category}</span></span>
+        <span className="shrink-0 font-extrabold text-xs text-[#45415c]">{money(segment.amount)}</span>
+      </button>)}
+    </div>
+  </div>;
+};
+
+const IncomeSources: React.FC<{ tuition: number; other: number }> = ({ tuition, other }) => {
+  const total = tuition + other;
+  const tuitionPct = total > 0 ? tuition / total * 100 : 0;
+  const arc = 'M 30 145 A 90 90 0 0 1 210 145';
+  return <div className="flex flex-col sm:flex-row xl:flex-col 2xl:flex-row gap-4 items-center">
+    <div className="w-full max-w-[218px] shrink-0">
+      <svg viewBox="0 0 240 168" className="w-full" role="img" aria-label={`Income sources: ${Math.round(tuitionPct)} percent tuition and ${Math.round(100 - tuitionPct)} percent other`}>
+        <path d={arc} fill="none" stroke="#e6b86e" strokeWidth="23" strokeLinecap="round"/>
+        {total > 0 && <path d={arc} fill="none" stroke="#655fa6" strokeWidth="23" strokeLinecap="butt" pathLength={100} strokeDasharray={`${tuitionPct} 100`} />}
+        <text x="120" y="113" textAnchor="middle" fill="#37344f" fontWeight="800" fontSize="29">{total ? Math.round(tuitionPct) : 0}%</text>
+        <text x="120" y="136" textAnchor="middle" fill="#9690a1" fontWeight="700" fontSize="11">from tuition</text>
+      </svg>
+    </div>
+    <div className="grid gap-3 w-full min-w-0">
+      <div className="flex items-center justify-between gap-2 border-b border-[#efecf1] pb-3">
+        <span className="flex gap-2 items-center text-xs font-bold text-[#797387]"><span className="w-2.5 h-2.5 rounded-full bg-[#655fa6]"/>Tuition <span className="text-[10px] font-normal">(automatic)</span></span>
+        <strong className="text-sm text-[#34324b]">{money(tuition)}</strong>
+      </div>
+      <div className="flex items-center justify-between gap-2">
+        <span className="flex gap-2 items-center text-xs font-bold text-[#797387]"><span className="w-2.5 h-2.5 rounded-full bg-[#e6b86e]"/>Other income</span>
+        <strong className="text-sm text-[#34324b]">{money(other)}</strong>
+      </div>
+    </div>
+  </div>;
+};
+
+const SpendingHeatmap: React.FC<{ month: string; daily: Record<number, number> }> = ({ month, daily }) => {
+  const [activeDay, setActiveDay] = useState<number | null>(null);
+  const [year, monthNumber] = month.split('-').map(Number);
+  const daysInMonth = new Date(year, monthNumber, 0).getDate();
+  const firstWeekday = new Date(year, monthNumber - 1, 1).getDay();
+  const maximum = Math.max(0, ...Object.values(daily));
+  const days = Array.from({ length: daysInMonth }, (_, index) => index + 1);
+  const chosenDay = activeDay !== null && activeDay <= daysInMonth ? activeDay : null;
+  const dayColor = (amount: number) => {
+    if (!amount || !maximum) return '#f3f0f4';
+    const intensity = amount / maximum;
+    if (intensity < .25) return '#dedbf0';
+    if (intensity < .5) return '#bdb6df';
+    if (intensity < .75) return '#9288c7';
+    return '#5f579d';
+  };
+  return <div className="max-w-[430px] mx-auto w-full">
+    <div className="grid grid-cols-7 gap-1.5 sm:gap-2 mb-2">{['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => <span key={index} className="text-center text-[11px] font-bold text-[#a49eac]">{day}</span>)}</div>
+    <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
+      {Array.from({ length: firstWeekday }, (_, index) => <span aria-hidden="true" key={`empty-${index}`} />)}
+      {days.map(day => <button type="button" key={day} onFocus={() => setActiveDay(day)} onMouseEnter={() => setActiveDay(day)} onClick={() => setActiveDay(day)}
+        aria-label={`${month}-${String(day).padStart(2, '0')}: spent ${money(daily[day] ?? 0)}`}
+        className={`aspect-square rounded-lg grid place-items-center text-[10px] sm:text-xs font-bold transition-transform hover:scale-105 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#655fa6] ${chosenDay === day ? 'ring-2 ring-offset-1 ring-[#655fa6]' : ''}`}
+        style={{ backgroundColor: dayColor(daily[day] || 0), color: (daily[day] || 0) / (maximum || 1) >= .75 ? '#fff' : '#5b5373' }}>
+        {day}
+      </button>)}
+    </div>
+    <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-[11px] font-semibold text-[#8f8999]">
+      <span>{chosenDay ? `${month}-${String(chosenDay).padStart(2, '0')}: ${money(daily[chosenDay] || 0)}` : 'Select any day to inspect spending'}</span>
+      <span className="flex items-center gap-1.5">Less {['#f3f0f4', '#dedbf0', '#bdb6df', '#9288c7', '#5f579d'].map(color => <i key={color} className="w-2.5 h-2.5 rounded-sm" style={{ background: color }}/>) } More</span>
+    </div>
+  </div>;
+};
+
 const FinanceEntryModal: React.FC<{
   isOpen: boolean;
   editing: FinanceTransaction | null;
@@ -135,6 +329,7 @@ export const PersonalFinance: React.FC<{ uid: string; students: Student[] }> = (
   const [editingBudget, setEditingBudget] = useState(false);
   const [budgetDraft, setBudgetDraft] = useState('');
   const [notice, setNotice] = useState('');
+  const [trendWindow, setTrendWindow] = useState<6 | 12>(6);
 
   useEffect(() => {
     setStore(readFinanceCache(uid));
@@ -201,6 +396,32 @@ export const PersonalFinance: React.FC<{ uid: string; students: Student[] }> = (
     acc[item.category] = (acc[item.category] || 0) + item.amount;
     return acc;
   }, {})).sort((a, b) => b[1] - a[1]);
+
+  // Use all recorded transactions for the historical trend, not just the selected month's summary.
+  const trendEndingMonth = allTime ? todayLocal().slice(0, 7) : month;
+  const trendData = useMemo<TrendPoint[]>(() => {
+    const keys = monthKeysEndingAt(trendEndingMonth, trendWindow);
+    const grouped = new Map(keys.map(key => [key, { income: 0, expenses: 0 }]));
+    entries.forEach(entry => {
+      const bucket = grouped.get(entry.date.slice(0, 7));
+      if (!bucket) return;
+      if (entry.type === 'income') bucket.income += entry.amount;
+      else bucket.expenses += entry.amount;
+    });
+    return keys.map(key => ({
+      key,
+      label: new Date(`${key}-01T12:00:00`).toLocaleDateString('en-BD', { month: 'short' }),
+      income: grouped.get(key)?.income || 0,
+      expenses: grouped.get(key)?.expenses || 0,
+    }));
+  }, [entries, trendEndingMonth, trendWindow]);
+  const dailyExpenseTotals = useMemo(() => entries.reduce<Record<number, number>>((totals, entry) => {
+    if (entry.type === 'expense' && entry.date.slice(0, 7) === month) {
+      const day = Number(entry.date.slice(8, 10));
+      if (Number.isInteger(day) && day >= 1 && day <= 31) totals[day] = (totals[day] || 0) + entry.amount;
+    }
+    return totals;
+  }, {}), [entries, month]);
 
   const handleSave = async (entry: FinanceTransaction) => {
     const ok = await personalFinanceService.saveEntry(uid, entry);
@@ -329,11 +550,31 @@ export const PersonalFinance: React.FC<{ uid: string; students: Student[] }> = (
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[1.1fr_.9fr] gap-4">
-        <section className={`${cardClass} space-y-5`}>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div><p className="text-[11px] font-bold uppercase tracking-[.14em] text-[#9692a0]">Plan your spending</p><h2 className="mt-1 text-lg font-extrabold tracking-tight text-[#302f46]">Monthly expense limit</h2></div>
-            <button onClick={() => { setBudgetDraft(String(budgetLimit || '')); setEditingBudget(!editingBudget); }} className="text-xs font-bold text-[#5b568f] hover:underline">{budgetLimit > 0 ? 'Edit limit' : 'Set limit'}</button>
+      <section className={`${cardClass} space-y-4`}>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-[.14em] text-[#9692a0]">Financial pulse</p>
+            <h2 className="mt-1 text-lg font-extrabold tracking-tight text-[#302f46]">Income & expense trends</h2>
+            <p className="mt-1 text-xs text-[#958f9e]">Through {monthTitle(trendEndingMonth)} · Select a month on the chart for details</p>
+          </div>
+          <div className="flex items-center rounded-xl bg-[#f3f1f6] p-1" role="group" aria-label="Trend range">
+            {([6, 12] as const).map(count => <button key={count} type="button" onClick={() => setTrendWindow(count)} aria-pressed={trendWindow === count}
+              className={`rounded-lg px-3 py-2 text-xs font-bold transition-all ${trendWindow === count ? 'bg-white shadow-sm text-[#37336e]' : 'text-[#928c9e] hover:text-[#5b568f]'}`}>{count}M</button>)}
+          </div>
+        </div>
+        <CashFlowChart data={trendData} />
+        <div className="flex flex-wrap items-center gap-4 text-[11px] font-bold text-[#8d8796]">
+          <span className="flex items-center gap-2"><i className="h-2.5 w-2.5 rounded-full bg-[#469b80]"/>Income</span>
+          <span className="flex items-center gap-2"><i className="h-2.5 w-2.5 rounded-full bg-[#df9876]"/>Expenses</span>
+          <span className="ml-auto text-[#aaa4b0] font-medium">Based on your recorded transactions</span>
+        </div>
+      </section>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <section className={`${cardClass} space-y-4`}>
+          <div className="flex items-start justify-between gap-3">
+            <div><p className="text-[11px] font-bold uppercase tracking-[.14em] text-[#9692a0]">Plan your spending</p><h2 className="mt-1 text-lg font-extrabold tracking-tight text-[#302f46]">Monthly budget</h2></div>
+            <button onClick={() => { setBudgetDraft(String(budgetLimit || '')); setEditingBudget(!editingBudget); }} className="text-xs font-bold text-[#5b568f] hover:underline shrink-0">{budgetLimit > 0 ? 'Edit limit' : 'Set limit'}</button>
           </div>
           {editingBudget && <form onSubmit={handleSaveBudget} className="flex flex-wrap gap-2 items-end">
             <label className="flex-1 min-w-[140px] text-xs font-semibold text-[#777284]">Limit (BDT, 0 to clear)
@@ -341,34 +582,37 @@ export const PersonalFinance: React.FC<{ uid: string; students: Student[] }> = (
             </label>
             <Button type="submit" size="sm">Save</Button><Button type="button" variant="ghost" size="sm" onClick={() => setEditingBudget(false)}>Cancel</Button>
           </form>}
-          {budgetLimit > 0 ? <>
-            <div className="flex flex-wrap items-baseline justify-between gap-2"><p className="text-2xl font-extrabold text-[#313048]">{money(monthExpenses)} <span className="text-sm font-semibold text-[#a19dab]">/ {money(budgetLimit)}</span></p><p className={`text-xs font-bold ${progress > 100 ? 'text-[#bb554c]' : 'text-[#797486]'}`}>{Math.round(progress)}% used</p></div>
-            <div role="progressbar" aria-valuenow={Math.min(Math.round(progress), 100)} aria-valuemin={0} aria-valuemax={100} aria-label="Monthly spending limit used" className="h-3 rounded-full overflow-hidden bg-[#f0eee9]"><div className={`h-full rounded-full transition-all ${progress > 100 ? 'bg-[#c96c60]' : 'bg-[#5b57a6]'}`} style={{ width: `${Math.min(progress, 100)}%` }} /></div>
-            <p className={`text-xs ${progress > 100 ? 'text-[#ba554d] font-bold' : 'text-[#898493]'}`}>{progress > 100 ? `${money(monthExpenses - budgetLimit)} over your limit.` : `${money(Math.max(0, budgetLimit - monthExpenses))} remaining for ${monthTitle(month)}.`}</p>
-          </> : <div className="rounded-2xl bg-[#f7f5ef] px-4 py-4 flex items-center gap-3"><PiggyBank className="w-7 h-7 shrink-0 text-[#9b8d65]" /><p className="text-xs leading-relaxed text-[#837e89]">Set a monthly spending limit to see how much you have left. The limit applies to each month.</p></div>}
-          {allTime && <p className="text-[11px] text-[#a19dab]">Budget progress is for {monthTitle(month)}, even when all-time totals are shown above.</p>}
+          {budgetLimit > 0 ? <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-center gap-2">
+            <BudgetGauge amount={monthExpenses} limit={budgetLimit} />
+            <div className="space-y-3 text-center sm:text-left">
+              <p className="text-xs font-bold text-[#968fa1]">Spent in {monthTitle(month)}</p>
+              <p className="text-2xl font-extrabold tracking-tight text-[#34314c]">{money(monthExpenses)}</p>
+              <p className="text-xs text-[#9a94a2]">of {money(budgetLimit)} monthly limit</p>
+              <div className={`rounded-xl px-3 py-2.5 text-xs font-bold ${progress > 100 ? 'bg-[#fff0ec] text-[#ba554d]' : 'bg-[#f2f0f9] text-[#5f5998]'}`}>
+                {progress > 100 ? `${money(monthExpenses - budgetLimit)} over budget` : `${money(Math.max(0, budgetLimit - monthExpenses))} remaining`}
+              </div>
+            </div>
+          </div> : <div className="rounded-2xl bg-[#f7f5ef] px-4 py-6 flex items-center gap-3"><PiggyBank className="w-9 h-9 shrink-0 text-[#9b8d65]" /><p className="text-xs leading-relaxed text-[#837e89]">Set a monthly budget to unlock your spending gauge. The same limit applies to every month.</p></div>}
+          {allTime && <p className="text-[11px] text-[#a19dab]">The budget gauge uses {monthTitle(month)}, even while the summary displays all-time figures.</p>}
         </section>
-        <section className={`${cardClass} space-y-4`}>
-          <div><p className="text-[11px] font-bold uppercase tracking-[.14em] text-[#9692a0]">Income breakdown</p><h2 className="mt-1 text-lg font-extrabold tracking-tight text-[#302f46]">Where your money came from</h2></div>
-          <div className="space-y-3">
-            <div className="flex justify-between gap-2 text-sm"><span className="text-[#7b7687]">Tuition payments <span className="text-[10px] text-[#a49fae]">(automatic)</span></span><strong className="text-[#38364e]">{money(tuitionIncome)}</strong></div>
-            <div className="h-2.5 rounded-full bg-[#eeeaf1] overflow-hidden"><div className="h-full rounded-full bg-[#5d57a0]" style={{ width: `${income ? (tuitionIncome / income) * 100 : 0}%` }} /></div>
-            <div className="flex justify-between gap-2 text-sm"><span className="text-[#7b7687]">Other personal income</span><strong className="text-[#38364e]">{money(income - tuitionIncome)}</strong></div>
-            <div className="h-2.5 rounded-full bg-[#eeeaf1] overflow-hidden"><div className="h-full rounded-full bg-[#e6b86e]" style={{ width: `${income ? ((income - tuitionIncome) / income) * 100 : 0}%` }} /></div>
-          </div>
-          <p className="text-xs leading-relaxed text-[#9691a0]">Tuition amounts come from payments logged on student profiles. They can't be edited here, so you won't accidentally change a student's payment history.</p>
+        <section className={`${cardClass} space-y-3`}>
+          <div><p className="text-[11px] font-bold uppercase tracking-[.14em] text-[#9692a0]">Income composition</p><h2 className="mt-1 text-lg font-extrabold tracking-tight text-[#302f46]">Where your money came from</h2></div>
+          <IncomeSources tuition={tuitionIncome} other={Math.max(0, income - tuitionIncome)} />
+          <p className="text-xs leading-relaxed text-[#9691a0]">Tuition payments are pulled from student profiles automatically and cannot be edited here.</p>
         </section>
       </div>
 
-      {expensesByCategory.length > 0 && <section className={`${cardClass} space-y-4`}>
-        <div><p className="text-[11px] font-bold uppercase tracking-[.14em] text-[#9692a0]">Spending insights</p><h2 className="mt-1 text-lg font-extrabold tracking-tight text-[#302f46]">Expenses by category</h2></div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
-          {expensesByCategory.map(([category, amount]) => <div key={category}>
-            <div className="flex items-center justify-between gap-3 mb-2 text-xs"><span className="font-semibold text-[#615d72]">{category}</span><strong className="text-[#34324d]">{money(amount)} · {Math.round(amount / expenses * 100)}%</strong></div>
-            <div className="h-2 rounded-full bg-[#f0eee9]"><div className="h-2 rounded-full bg-[#8c84ba]" style={{ width: `${amount / expenses * 100}%` }} /></div>
-          </div>)}
-        </div>
-      </section>}
+      <div className="grid grid-cols-1 xl:grid-cols-[1.2fr_.8fr] gap-4">
+        <section className={`${cardClass} space-y-2`}>
+          <div><p className="text-[11px] font-bold uppercase tracking-[.14em] text-[#9692a0]">Spending mix</p><h2 className="mt-1 text-lg font-extrabold tracking-tight text-[#302f46]">Expenses by category</h2></div>
+          {expensesByCategory.length ? <SpendingDonut categories={expensesByCategory} total={expenses} /> : <div className="min-h-[220px] grid place-items-center text-center px-4"><div><ReceiptText className="w-8 h-8 mx-auto text-[#c4bbd0]"/><p className="mt-2 text-sm font-bold text-[#555169]">No expenses for this period</p><p className="mt-1 text-xs text-[#9d97a7]">Add an expense to see its category distribution.</p></div></div>}
+        </section>
+        <section className={`${cardClass} space-y-4`}>
+          <div><p className="text-[11px] font-bold uppercase tracking-[.14em] text-[#9692a0]">Daily rhythm</p><h2 className="mt-1 text-lg font-extrabold tracking-tight text-[#302f46]">Spending calendar</h2><p className="mt-1 text-xs text-[#9a94a2]">{monthTitle(month)} · Darker dates had more expenses</p></div>
+          <SpendingHeatmap month={month} daily={dailyExpenseTotals} />
+          {allTime && <p className="text-[11px] text-[#a19dab]">Showing the selected month. Change the month above to inspect another calendar.</p>}
+        </section>
+      </div>
 
       <section className="tt-card rounded-[24px] overflow-hidden">
         <div className="px-5 sm:px-6 py-5 border-b border-[#efede8] flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
