@@ -11,7 +11,7 @@ import { Button } from './components/Button';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { PasswordResetPage } from './pages/PasswordResetPage';
-import { Bell, BellOff, CloudSync, AlertCircle, LogOut, Settings, MapPin, LayoutDashboard, Wifi, WifiOff } from 'lucide-react';
+import { Bell, BellOff, CloudSync, AlertCircle, LogOut, Settings, MapPin, LayoutDashboard, WalletCards, Wifi, WifiOff } from 'lucide-react';
 import { firebaseService } from './services/firebaseService';
 import { syncService } from './services/syncService';
 import { isFirebaseConfigured } from './services/firebase';
@@ -22,6 +22,7 @@ import { Capacitor } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { BrandLogo } from './components/BrandLogo';
 import { DashboardSkeleton } from './components/DashboardSkeleton';
+import { PersonalFinance } from './components/PersonalFinance';
 
 const STORAGE_KEY = 'tutortrack_data_v1';
 
@@ -531,6 +532,11 @@ const App: React.FC = () => {
                 <BrandLogo size="sm" />
               </button>
 
+              <nav aria-label="Teacher panel" className="hidden md:flex items-center gap-1 bg-[#ebe8e3] rounded-xl p-1 ml-auto mr-2">
+                <button onClick={handleBackToDashboard} className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold ${currentView === 'dashboard' || currentView === 'student-detail' ? 'bg-white text-[#34326f] shadow-sm' : 'text-[#7b7586] hover:text-[#34326f]'}`}><LayoutDashboard className="w-3.5 h-3.5" /> Dashboard</button>
+                <button onClick={() => setCurrentView('finance')} className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold ${currentView === 'finance' ? 'bg-white text-[#34326f] shadow-sm' : 'text-[#7b7586] hover:text-[#34326f]'}`}><WalletCards className="w-3.5 h-3.5" /> Finance</button>
+              </nav>
+
               <div className="flex items-center gap-1.5 sm:gap-2">
                 <div className="hidden md:flex items-center gap-2 mr-1">
                   <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-[.08em] ${isOnline ? 'bg-[#edf7f1] text-[#3f7c5e]' : 'bg-[#fff1ee] text-[#a95147]'}`}>
@@ -569,10 +575,11 @@ const App: React.FC = () => {
             </div>
           </header>
 
-          <div className="sm:hidden sticky top-[72px] z-30 bg-[#f6f4ef]/92 backdrop-blur-lg border-b border-[#e4e1da] px-4 py-2 flex gap-2">
-            <button onClick={handleBackToDashboard} className={`flex-1 h-9 rounded-xl text-xs font-bold inline-flex items-center justify-center gap-2 ${currentView === 'dashboard' ? 'bg-[#34326f] text-white' : 'bg-white text-[#6d6978] border border-[#dfdbe2]'}`}><LayoutDashboard className="w-3.5 h-3.5"/> Dashboard</button>
+          <nav aria-label="Teacher panel" className="md:hidden sticky top-[72px] z-30 bg-[#f6f4ef]/92 backdrop-blur-lg border-b border-[#e4e1da] px-4 py-2 flex gap-2">
+            <button onClick={handleBackToDashboard} className={`flex-1 h-9 rounded-xl text-xs font-bold inline-flex items-center justify-center gap-2 ${currentView === 'dashboard' || currentView === 'student-detail' ? 'bg-[#34326f] text-white' : 'bg-white text-[#6d6978] border border-[#dfdbe2]'}`}><LayoutDashboard className="w-3.5 h-3.5"/> Dashboard</button>
+            <button onClick={() => setCurrentView('finance')} className={`flex-1 h-9 rounded-xl text-xs font-bold inline-flex items-center justify-center gap-2 ${currentView === 'finance' ? 'bg-[#34326f] text-white' : 'bg-white text-[#6d6978] border border-[#dfdbe2]'}`}><WalletCards className="w-3.5 h-3.5"/> Finance</button>
             <button onClick={() => setCurrentView('settings')} className={`flex-1 h-9 rounded-xl text-xs font-bold inline-flex items-center justify-center gap-2 ${currentView === 'settings' ? 'bg-[#34326f] text-white' : 'bg-white text-[#6d6978] border border-[#dfdbe2]'}`}><Settings className="w-3.5 h-3.5"/> Profile</button>
-          </div>
+          </nav>
 
           <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-7 lg:py-8">
             {!isOnline && (
@@ -599,6 +606,8 @@ const App: React.FC = () => {
               <StudentDetail student={selectedStudent} onBack={handleBackToDashboard} onLogSession={() => openSessionModal(selectedStudent.id)} onLogPayment={() => openPaymentModal(selectedStudent.id)} onEditStudent={() => openStudentForm(selectedStudent.id)} onDeleteStudent={() => handleDeleteStudent(selectedStudent.id)} />
             )}
 
+            {currentView === 'finance' && <PersonalFinance key={currentUser.uid} uid={currentUser.uid} students={students} />}
+
             {currentView === 'settings' && currentUser && <TutorProfile user={currentUser} onBack={handleBackToDashboard} />}
           </main>
 
@@ -612,7 +621,7 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {!authLoading && !currentUser && (currentView === 'dashboard' || currentView === 'student-detail' || currentView === 'settings') && (
+      {!authLoading && !currentUser && (currentView === 'dashboard' || currentView === 'student-detail' || currentView === 'finance' || currentView === 'settings') && (
         <LoginPage onSwitchToRegister={() => setCurrentView('register')} onSwitchToPasswordReset={() => setCurrentView('password-reset')} />
       )}
     </>

@@ -53,7 +53,31 @@ export interface Student {
   };
 }
 
-export type ViewState = 'dashboard' | 'students' | 'student-detail' | 'settings' | 'login' | 'register' | 'password-reset';
+export type FinanceTransactionType = 'income' | 'expense';
+
+// Manual personal finance entries are independent from student tuition payments.
+export interface FinanceTransaction {
+  id: string;
+  type: FinanceTransactionType;
+  amount: number;
+  category: string;
+  date: string; // Local calendar date: YYYY-MM-DD
+  note: string;
+  updatedAt: number; // Epoch milliseconds, for offline/cloud reconciliation
+  deleted?: boolean; // Tombstone keeps offline deletes from reappearing on sync
+}
+
+export interface FinanceBudget {
+  monthlyLimit: number;
+  updatedAt: number;
+}
+
+export interface FinanceStore {
+  entries: FinanceTransaction[];
+  budget: FinanceBudget;
+}
+
+export type ViewState = 'dashboard' | 'students' | 'student-detail' | 'finance' | 'settings' | 'login' | 'register' | 'password-reset';
 
 export interface AppState {
   students: Student[];

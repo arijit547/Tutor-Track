@@ -11,6 +11,14 @@ service cloud.firestore {
         allow read, write: if request.auth.uid == tutorId;
       }
 
+      // Private finance entries and preferences; not available to other users.
+      match /financeEntries/{entryId} {
+        allow read, write: if request.auth != null && request.auth.uid == tutorId;
+      }
+      match /financeSettings/{settingId} {
+        allow read, write: if request.auth != null && request.auth.uid == tutorId;
+      }
+
       // Students subcollection and all nested documents (sessions, payments)
       match /students/{document=**} {
         allow read, write: if request.auth.uid == tutorId;
