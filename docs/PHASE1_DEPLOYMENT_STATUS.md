@@ -34,6 +34,8 @@ Commit `372eec7` has been redeployed with the server configuration. Vercel repor
 
 The approved Admin credential passed a local read-only authentication and Firestore check against `notificationScheduler/setupProbe`. No document was created and no user data was output. This verifies credential access, not deployed FCM delivery or a successful reminder sweep.
 
-The user still needs to sign in to the app for live device registration and delivery checks. Actual push delivery and an authenticated reminder sweep remain unverified. See [the billing-free setup guide](FREE_PUSH_SETUP.md) and [scheduler activation](FREE_SCHEDULER.md).
+During the live test on the protected testing alias, browser notification permission was allowed. Push registration then failed because the service-worker request was redirected. This was not a permission denial; FCM delivery on that preview remains unverified.
+
+The owner approved publishing the entire testing branch, including its existing monthly salary/billing changes. The next live registration and push check needs the existing public production domain after the reviewed source is merged and deployed. Preview deployment protection will remain unchanged, and the automatic scheduler flag must remain disabled while production push is tested. Actual push delivery and an authenticated reminder sweep remain unverified. See [the billing-free setup guide](FREE_PUSH_SETUP.md) and [scheduler activation](FREE_SCHEDULER.md).
 
 Production deployment and automatic scheduler activation remain pending. Real two-device delivery, closed-site delivery and live logout/token behavior must be verified after those steps. GitHub scheduling can be delayed or dropped and is not an exact alarm.

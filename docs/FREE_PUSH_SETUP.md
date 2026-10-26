@@ -64,4 +64,6 @@ On Android Chrome, use **Install app / Add to Home Screen**. On iOS/iPadOS 16.4+
 
 Sign in and open **Profile > Notifications & location**. Enable notifications and send an immediate test. For a closed-site test, select **Test after closing app**, wait for confirmation and close TutorTrack. Check the workflow run separately from phone delivery.
 
+The protected testing alias has been tried: browser notification permission was allowed, but service-worker registration failed because its request was redirected. FCM delivery there is unverified. Continue the live test on the existing public production domain after the reviewed source is merged and deployed, keeping Vercel preview protection unchanged. Leave `PUSH_REMINDERS_ENABLED` unset or `false` while checking production registration, test delivery and the authenticated reminder endpoint.
+
 Before production acceptance, verify two-device delivery, permission changes, token refresh, logout/account switching, owner-only Firestore access, deep links and a real scheduled class/balance reminder. Closing the site stops GPS; background push does not provide background GPS.
