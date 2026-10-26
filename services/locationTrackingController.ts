@@ -10,7 +10,7 @@ export interface LocationTrackingState {
 const locationMessage = (error: unknown, siteAllowed = false) => {
   const code = (error as { code?: number })?.code;
   if (code === 1) return siteAllowed
-    ? 'This website already has location permission, but your device is denying access. Check Location Services and your browser\'s location access in system settings, then try again.'
+    ? 'This website already has location permission, but the browser could not provide your location. Check VPN or location-privacy extensions, then Location Services in system settings, and try again.'
     : 'Location access is blocked. Allow location in your browser settings and check your device Location Services, then enable tracking.';
   if (code === 3) return 'Location timed out. Check that location services are on and try again.';
   return 'Location is unavailable. Check your device location services and try again.';
@@ -45,8 +45,8 @@ export class LocationTrackingController {
     this.publish({ ...patch, error: locationMessage(error, this.permission?.state === 'granted') });
     if ((error as { code?: number })?.code !== 1 || !navigator.permissions?.query) return;
     try {
-      // A device can deny GPS even though this site's browser permission is
-      // granted. Querying permission does not request location or show a prompt.
+      // System permissions or an extension can deny GPS even when this site's
+      // permission is granted. This query neither requests GPS nor prompts.
       const permission = await navigator.permissions.query({ name: 'geolocation' });
       if (!this.disposed && generation === this.generation) {
         this.publish({ error: locationMessage(error, permission.state === 'granted') });
