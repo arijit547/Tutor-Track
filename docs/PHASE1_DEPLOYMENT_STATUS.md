@@ -5,13 +5,17 @@ Verified on 2026-10-26 (Asia/Dhaka). The selected architecture is billing-free: 
 ## Account setup completed
 
 - Firebase project: `tutortrack-f801e` (TutorTrack).
-- FCM HTTP v1 API: enabled. Existing public Web Push key read from Firebase Console; no new private credentials created.
+- FCM HTTP v1 API: enabled. Existing public Web Push key read from Firebase Console.
 - Local `.env.local`: populated with the project's public web configuration and VAPID key; excluded from Git.
 - Live Firestore rules: published at 02:25 Dhaka on 2026-10-26. Existing owner-only profile/student/Finance permissions are preserved, with validated push/settings access and server-only reminder paths added.
 - An ignored reconstruction of the prior live rules and source metadata are retained under `output/firebase/tutortrack-f801e/`.
 - Vercel is connected to public repository `arijit547/Tutor-Track`. Production tracks `main`; current work uses `test-finance-firebase`.
+- Validated implementation: commit `372eec7` on `test-finance-firebase`.
 - The public VAPID key has been configured for Preview and Development; the prior Production entry remains present.
 - The earlier `VITE_FIREBASE_FUNCTIONS_REGION` setting remains on Vercel but is unused by the new same-origin API backend.
+- With the owner's approval, a Firebase Admin service-account key was generated. Its JSON is stored as a server-only Vercel Secret for Production and the `test-finance-firebase` branch. A local backup is retained in the ignored `.secrets/` directory.
+- `CRON_SECRET` is stored as a Vercel Secret for Production and the `test-finance-firebase` branch. The matching GitHub repository secret was added and the addition was confirmed.
+- `APP_URL` is saved in separate Vercel environment entries for Production and the `test-finance-firebase` branch.
 
 ## Billing-free implementation
 
@@ -24,8 +28,12 @@ Verified on 2026-10-26 (Asia/Dhaka). The selected architecture is billing-free: 
 
 ## Validation and remaining activation
 
-TypeScript, frontend build, location lifecycle, HTTP transport, server authorization, billing, scheduler retry/continuation and local Firestore rules have been checked. Local API smoke checks return 405 for unsupported methods, 401 for unauthenticated tests and safe 503 when server configuration is absent. Local checks do not prove real phone delivery.
+TypeScript, frontend build, location lifecycle, HTTP transport, server authorization, billing, scheduler retry/continuation and local Firestore rules have been checked. Local API smoke checks return 405 for unsupported methods, 401 for unauthenticated tests and safe 503 when server configuration is absent. The deployed preview's native API routes also return 405 for unsupported GET requests without startup errors. These checks do not prove authenticated FCM delivery or real phone delivery.
 
-The server still needs an approved Firebase Admin credential stored as a Vercel server-only Secret, plus a matching scheduler secret in Vercel and GitHub Actions. No private key has been generated or transmitted. See [the billing-free setup guide](FREE_PUSH_SETUP.md) and [scheduler activation](FREE_SCHEDULER.md).
+Commit `372eec7` has been redeployed with the server configuration. Vercel reports **Ready**, with a 47-second deployment duration: [deployment dashboard](https://vercel.com/arijit-pauls-projects-c20b55a9/tutor-track/HGCV4hoHcc9fN2de8wnVfBtXLCz6), [immutable preview](https://tutor-track-bwerkce6p-arijit-pauls-projects-c20b55a9.vercel.app/). The existing stable testing alias is unchanged.
+
+The approved Admin credential passed a local read-only authentication and Firestore check against `notificationScheduler/setupProbe`. No document was created and no user data was output. This verifies credential access, not deployed FCM delivery or a successful reminder sweep.
+
+The user still needs to sign in to the app for live device registration and delivery checks. Actual push delivery and an authenticated reminder sweep remain unverified. See [the billing-free setup guide](FREE_PUSH_SETUP.md) and [scheduler activation](FREE_SCHEDULER.md).
 
 Production deployment and automatic scheduler activation remain pending. Real two-device delivery, closed-site delivery and live logout/token behavior must be verified after those steps. GitHub scheduling can be delayed or dropped and is not an exact alarm.
