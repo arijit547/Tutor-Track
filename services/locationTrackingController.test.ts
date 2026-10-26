@@ -126,6 +126,7 @@ test('explicit enable saves only after successful location permission and off pe
 });
 
 test('denied explicit request leaves preference off and reports an actionable error', async () => {
+  permission.state = 'denied';
   const item = makeController();
   const enabling = item.controller.toggle();
   currentError!({ code: 1 } as GeolocationPositionError);
@@ -134,6 +135,35 @@ test('denied explicit request leaves preference off and reports an actionable er
   assert.equal(item.state().busy, false);
   assert.equal(values.has('tutortrack_location_teacher-a'), false);
   assert.match(item.state().error!, /browser settings/);
+});
+
+test('site permission granted with a denied GPS request points to device settings without enabling tracking', async () => {
+  const item = makeController();
+  const enabling = item.controller.toggle();
+  currentError!({ code: 1 } as GeolocationPositionError);
+  await enabling;
+  assert.equal(item.state().enabled, false);
+  assert.equal(item.state().busy, false);
+  assert.equal(watchCount, 0);
+  assert.equal(values.has('tutortrack_location_teacher-a'), false);
+  assert.match(item.state().error!, /already has location permission/);
+  assert.match(item.state().error!, /system settings/);
+  assert.equal(promptCount, 1, 'diagnosing the failure must not request GPS again');
+});
+
+test('late device-permission diagnostics cannot update a disposed controller', async () => {
+  let finishQuery!: (value: unknown) => void;
+  query = () => new Promise(resolve => { finishQuery = resolve; });
+  const item = makeController();
+  const enabling = item.controller.toggle();
+  currentError!({ code: 1 } as GeolocationPositionError);
+  await Promise.resolve();
+  const errorBeforeLogout = item.state().error;
+  item.controller.dispose();
+  finishQuery(permission);
+  await enabling;
+  assert.equal(item.state().error, errorBeforeLogout);
+  assert.equal(watchCount, 0);
 });
 
 test('an explicit OFF stays off for this visit if storage cannot be written', async () => {
@@ -194,6 +224,7 @@ test('GPS errors are surfaced and permission errors disable tracking', async () 
   assert.equal(item.state().enabled, true);
   watchError!({ code: 1 } as GeolocationPositionError);
   assert.equal(item.state().enabled, false);
+  assert.match(item.state().error!, /already has location permission/);
 });
 
 test('student updates retain dwell time and changing accounts clears session suppression', async () => {

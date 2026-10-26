@@ -7,9 +7,11 @@ export interface LocationTrackingState {
   error: string | null;
 }
 
-const locationMessage = (error: unknown) => {
+const locationMessage = (error: unknown, siteAllowed = false) => {
   const code = (error as { code?: number })?.code;
-  if (code === 1) return 'Location access is blocked. Allow location in your browser settings, then enable tracking.';
+  if (code === 1) return siteAllowed
+    ? 'This website already has location permission, but your device is denying access. Check Location Services and your browser\'s location access in system settings, then try again.'
+    : 'Location access is blocked. Allow location in your browser settings and check your device Location Services, then enable tracking.';
   if (code === 3) return 'Location timed out. Check that location services are on and try again.';
   return 'Location is unavailable. Check your device location services and try again.';
 };
@@ -36,6 +38,22 @@ export class LocationTrackingController {
     if (this.disposed) return;
     this.state = { ...this.state, ...patch };
     this.onState(this.state);
+  }
+
+  private async reportLocationError(error: unknown, patch: Partial<LocationTrackingState> = {}) {
+    const generation = this.generation;
+    this.publish({ ...patch, error: locationMessage(error, this.permission?.state === 'granted') });
+    if ((error as { code?: number })?.code !== 1 || !navigator.permissions?.query) return;
+    try {
+      // A device can deny GPS even though this site's browser permission is
+      // granted. Querying permission does not request location or show a prompt.
+      const permission = await navigator.permissions.query({ name: 'geolocation' });
+      if (!this.disposed && generation === this.generation) {
+        this.publish({ error: locationMessage(error, permission.state === 'granted') });
+      }
+    } catch {
+      // The immediate message still explains both browser and device settings.
+    }
   }
 
   private getPreference() {
@@ -71,9 +89,9 @@ export class LocationTrackingController {
       if (error.code === 1) {
         this.generation++;
         stopLocationTracking();
-        this.publish({ enabled: false, busy: false, error: locationMessage(error) });
+        void this.reportLocationError(error, { enabled: false, busy: false });
       } else {
-        this.publish({ error: locationMessage(error) });
+        void this.reportLocationError(error);
       }
     });
   }
@@ -147,7 +165,7 @@ export class LocationTrackingController {
       await this.refresh();
     } catch (error) {
       if (!this.disposed && generation === this.generation) {
-        this.publish({ busy: false, enabled: false, error: locationMessage(error) });
+        await this.reportLocationError(error, { busy: false, enabled: false });
       }
     }
   }

@@ -1,6 +1,6 @@
 ﻿# Phase 1 deployment status
 
-Verified on 2026-10-26 (Asia/Dhaka). The selected architecture is billing-free: Firebase Spark + Vercel Hobby + public GitHub Actions. No Blaze upgrade has been made.
+Verified through 2026-10-27 (Asia/Dhaka). The selected architecture is billing-free: Firebase Spark + Vercel Hobby + public GitHub Actions. No Blaze upgrade has been made.
 
 ## Account setup completed
 
@@ -10,7 +10,7 @@ Verified on 2026-10-26 (Asia/Dhaka). The selected architecture is billing-free: 
 - Live Firestore rules: published at 02:25 Dhaka on 2026-10-26. Existing owner-only profile/student/Finance permissions are preserved, with validated push/settings access and server-only reminder paths added.
 - An ignored reconstruction of the prior live rules and source metadata are retained under `output/firebase/tutortrack-f801e/`.
 - Vercel is connected to public repository `arijit547/Tutor-Track`. Production tracks `main`; current work uses `test-finance-firebase`.
-- Validated implementation: commit `372eec7` on `test-finance-firebase`.
+- Validated implementation: `809670c` on `test-finance-firebase`, merged into `main` with merge commit `41842851151eddd5d8dd89b1e21ba15decb6c041` from the `output/phase1-release` worktree. The owner approved the full branch, including monthly salary/billing changes.
 - The public VAPID key has been configured for Preview and Development; the prior Production entry remains present.
 - The earlier `VITE_FIREBASE_FUNCTIONS_REGION` setting remains on Vercel but is unused by the new same-origin API backend.
 - With the owner's approval, a Firebase Admin service-account key was generated. Its JSON is stored as a server-only Vercel Secret for Production and the `test-finance-firebase` branch. A local backup is retained in the ignored `.secrets/` directory.
@@ -23,19 +23,23 @@ Verified on 2026-10-26 (Asia/Dhaka). The selected architecture is billing-free: 
 - `POST /api/push/reminders` authenticates the scheduler secret and runs bounded, resumable sweeps.
 - Financial history is evaluated once per tutor/day after 09:00 Dhaka, with catch-up before 21:00.
 - Slow tutors resume from a saved student cursor, retries skip successful devices, and exhausted delivery attempts do not repeatedly consume history reads.
-- GitHub Actions requests a sweep at minutes 2, 7, 12, and so on through 57. It remains dormant until the workflow is on `main`, secrets are configured, a manual check passes, and `PUSH_REMINDERS_ENABLED=true` is set.
+- GitHub Actions requests a sweep at minutes 2, 7, 12, and so on through 57. The workflow is on `main`; after a successful manual sweep, `PUSH_REMINDERS_ENABLED=true` was saved and verified.
 - The obsolete Cloud Functions scaffold has been moved into ignored `output/legacy-cloud-functions-phase1/`. It is not part of the active source or deployment.
 
-## Validation and remaining activation
+## Validation and remaining device checks
 
-The current 66 application tests, TypeScript, native Node API guard and frontend build pass. Eight local Firestore security tests passed earlier; their rules have not changed. Coverage includes location lifecycle, HTTP transport, server authorization, billing and scheduler retry/continuation. A pre-release billing fix preserves a future-start student's original start when salary is edited, without restoring the previous salary later. Regression checks also preserve legacy completed/missed-session earnings and received payments during conversion. Local API smoke checks return 405 for unsupported methods, 401 for unauthenticated tests and safe 503 when server configuration is absent. The deployed preview's native API routes also return 405 for unsupported GET requests without startup errors. These checks do not prove authenticated FCM delivery or real phone delivery.
+The current 68 application tests, TypeScript, native Node API guard and frontend build pass. Eight local Firestore security tests passed earlier; their rules have not changed. Coverage includes location lifecycle, HTTP transport, server authorization, billing and scheduler retry/continuation. The billing regression checks preserve future starts, legacy completed/missed-session earnings and received payments during conversion.
 
-Commit `372eec7` has been redeployed with the server configuration. Vercel reports **Ready**, with a 47-second deployment duration: [deployment dashboard](https://vercel.com/arijit-pauls-projects-c20b55a9/tutor-track/HGCV4hoHcc9fN2de8wnVfBtXLCz6), [immutable preview](https://tutor-track-bwerkce6p-arijit-pauls-projects-c20b55a9.vercel.app/). The existing stable testing alias is unchanged.
+Production is deployed at [TutorTrack](https://tutor-track-ten.vercel.app). Vercel reports **Ready**, with a 44-second deployment duration: [deployment dashboard](https://vercel.com/arijit-pauls-projects-c20b55a9/tutor-track/5FePfpMfrp1yQEF42N2B54GRbY2d). The production service worker returns HTTP 200 with `application/javascript` and no redirect. Unauthenticated POSTs to both push endpoints return 401.
 
-The approved Admin credential passed a local read-only authentication and Firestore check against `notificationScheduler/setupProbe`. No document was created and no user data was output. This verifies credential access, not deployed FCM delivery or a successful reminder sweep.
+The approved Admin credential passed a local read-only authentication and Firestore check against `notificationScheduler/setupProbe`; that check created no document and output no user data.
 
-During the live test on the protected testing alias, browser notification permission was allowed. Push registration then failed because the service-worker request was redirected. This was not a permission denial; FCM delivery on that preview remains unverified.
+The signed-in production Chrome session successfully enabled push registration. The immediate-test API accepted a send for one device. The user confirmed receiving the computer notification, and a real foreground FCM test banner was also observed in the app. Read-only inspection found two token registrations under one account; this does not prove two physical devices. Phone delivery has not been verified.
 
-The owner approved publishing the entire testing branch, including its existing monthly salary/billing changes. The next live registration and push check needs the existing public production domain after the reviewed source is merged and deployed. Preview deployment protection will remain unchanged, and the automatic scheduler flag must remain disabled while production push is tested. Actual push delivery and an authenticated reminder sweep remain unverified. See [the billing-free setup guide](FREE_PUSH_SETUP.md) and [scheduler activation](FREE_SCHEDULER.md).
+[GitHub manual run #1](https://github.com/arijit547/Tutor-Track/actions/runs/40312636581) succeeded; its job took five seconds. The scheduler enable flag was saved and verified afterward. [Automatic scheduled run #2](https://github.com/arijit547/Tutor-Track/actions/runs/40367372924) also completed successfully. A later authenticated sweep returned HTTP 200 with zero failures. Scheduling is operational but timing remains best effort.
 
-Production deployment and automatic scheduler activation remain pending. Real two-device delivery, closed-site delivery and live logout/token behavior must be verified after those steps. GitHub scheduling can be delayed or dropped and is not an exact alarm.
+The protected preview previously allowed notification permission but redirected service-worker registration. Preview protection was left unchanged; live registration succeeded on the existing public production domain.
+
+On 2026-10-27, a fresh production page reported geolocation permission `granted`, HTTPS enabled and page policy allowing geolocation, but the actual GPS request returned permission-denied code 1. Windows global/user/desktop location consent reads were Allow and the location service was running; no system permissions were changed. The browser/device still refuses GPS, so live tracking and auto-resume cannot yet be verified. The app now distinguishes this device-level refusal from a denied site permission. Regression tests ensure it never claims tracking is enabled and ignores late diagnostics after logout. The duplicate notice nested in the location icon button was removed, and location errors no longer hide push results.
+
+The later queued test was processed and its server status became `sent`. Phone delivery, fully closed-site display and live logout/token behavior remain unverified. A stale browser-controlled production tab could not be closed, so that delayed test must not be presented as proof that every TutorTrack tab was closed. GitHub scheduling can be delayed or dropped and is not an exact alarm. See [the billing-free setup guide](FREE_PUSH_SETUP.md) and [scheduler details](FREE_SCHEDULER.md). Chrome documents the separate [Windows system location permission](https://developer.chrome.com/blog/changes-location-permissions-windows/).

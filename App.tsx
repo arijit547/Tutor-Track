@@ -440,14 +440,7 @@ const App: React.FC = () => {
 
                 <button onClick={location.toggle} disabled={location.busy} aria-label={locationTrackingEnabled ? "Disable location tracking" : "Enable location tracking"} aria-pressed={locationTrackingEnabled} className={`h-9 w-9 sm:h-10 sm:w-10 rounded-xl grid place-items-center transition-colors relative ${locationTrackingEnabled ? 'bg-[#edf7f1] text-[#3f805f]' : 'text-[#878492] hover:bg-[#ece9e2]'}`} title={locationTrackingEnabled ? 'Location tracking active' : 'Enable auto-session location tracking'}>
                   <MapPin className="w-[18px] h-[18px]" />
-                  {(push.message || push.error || location.error || error) && (
-              <div role={push.error || location.error || error ? 'alert' : 'status'} className="mb-4 rounded-[16px] border border-[#ddd8eb] bg-white px-4 py-3 flex items-start justify-between gap-3">
-                <p className="text-xs leading-5 text-[#55516b]">{push.error || location.error || error || push.message}</p>
-                {location.error ? <button className="text-xs font-bold text-[#55518f] shrink-0" onClick={() => setCurrentView('settings')}>Location settings</button> : <button className="text-xs font-bold text-[#55518f] shrink-0" onClick={() => { push.dismissMessage(); setError(null); }}>Dismiss</button>}
-              </div>
-            )}
-
-            {locationTrackingEnabled && <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-[#55a377] ring-2 ring-[#edf7f1]" />}
+                  {locationTrackingEnabled && <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-[#55a377] ring-2 ring-[#edf7f1]" />}
                 </button>
 
                 <span className="hidden sm:block h-7 w-px bg-[#ddd9d1] mx-0.5" />
@@ -484,10 +477,17 @@ const App: React.FC = () => {
               </div>
             )}
 
-            {(push.message || push.error || location.error || error) && (
-              <div role={push.error || location.error || error ? 'alert' : 'status'} className="mb-4 rounded-[16px] border border-[#ddd8eb] bg-white px-4 py-3 flex items-start justify-between gap-3">
-                <p className="text-xs leading-5 text-[#55516b]">{push.error || location.error || error || push.message}</p>
-                {location.error ? <button className="text-xs font-bold text-[#55518f] shrink-0" onClick={() => setCurrentView('settings')}>Location settings</button> : <button className="text-xs font-bold text-[#55518f] shrink-0" onClick={() => { push.dismissMessage(); setError(null); }}>Dismiss</button>}
+            {(push.message || push.error || error) && (
+              <div role={push.error || error ? 'alert' : 'status'} className="mb-4 rounded-[16px] border border-[#ddd8eb] bg-white px-4 py-3 flex items-start justify-between gap-3">
+                <p className="text-xs leading-5 text-[#55516b]">{push.error || error || push.message}</p>
+                <button className="text-xs font-bold text-[#55518f] shrink-0" onClick={() => { push.dismissMessage(); setError(null); }}>Dismiss</button>
+              </div>
+            )}
+
+            {location.error && currentView !== 'settings' && (
+              <div role="alert" className="mb-4 rounded-[16px] border border-[#ddd8eb] bg-white px-4 py-3 flex items-start justify-between gap-3">
+                <p className="text-xs leading-5 text-[#55516b]">{location.error}</p>
+                <button className="text-xs font-bold text-[#55518f] shrink-0" onClick={() => setCurrentView('settings')}>Location settings</button>
               </div>
             )}
 
