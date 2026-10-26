@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { FieldPath, FieldValue, Timestamp, type Firestore, type DocumentReference, type QueryDocumentSnapshot } from 'firebase-admin/firestore';
 import type { Messaging } from 'firebase-admin/messaging';
-import type { Payment, Session, Student } from '../types';
-import { DEFAULT_SETTINGS, LEASE_MS, MAX_ATTEMPTS, STALE_TOKEN_MS, appLink, buildReminders, canClaim, dhakaParts, financialHandledToday, invalidToken, pendingDevices, tokenHash, type Reminder, type ReminderSettings } from './reminderCore';
-import { PushError, safeErrorCode } from './errors';
+import type { Payment, Session, Student } from '../types.js';
+import { DEFAULT_SETTINGS, LEASE_MS, MAX_ATTEMPTS, STALE_TOKEN_MS, appLink, buildReminders, canClaim, dhakaParts, financialHandledToday, invalidToken, pendingDevices, tokenHash, type Reminder, type ReminderSettings } from './reminderCore.js';
+import { PushError, safeErrorCode } from './errors.js';
 
 export interface TestRequest { deviceId: string; delay: boolean }
 export function parseTestRequest(input: unknown): TestRequest {

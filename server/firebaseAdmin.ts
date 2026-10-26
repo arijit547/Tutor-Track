@@ -2,7 +2,7 @@ import { cert, getApps, initializeApp, type ServiceAccount } from 'firebase-admi
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getMessaging } from 'firebase-admin/messaging';
-import { PushError } from './errors';
+import { PushError } from './errors.js';
 
 export function readServiceAccount(env: NodeJS.ProcessEnv): ServiceAccount {
   let account: ServiceAccount;

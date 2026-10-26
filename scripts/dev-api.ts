@@ -1,7 +1,7 @@
 import { createServer } from 'node:http';
-import testHandler from '../api/push/test';
-import remindersHandler from '../api/push/reminders';
-import type { ApiResponse } from '../server/httpHandlers';
+import testHandler from '../api/push/test.js';
+import remindersHandler from '../api/push/reminders.js';
+import type { ApiResponse } from '../server/httpHandlers.js';
 
 // Bind locally: this runner is for development, not deployment.
 const server = createServer(async (request, response) => {

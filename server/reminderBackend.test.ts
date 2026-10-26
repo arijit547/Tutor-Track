@@ -2,9 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Timestamp, type Firestore } from 'firebase-admin/firestore';
 import type { Messaging, MulticastMessage } from 'firebase-admin/messaging';
-import { createReminderBackend } from './reminderBackend';
-import { buildReminders, DEFAULT_SETTINGS, MAX_ATTEMPTS, tokenHash } from './reminderCore';
-import type { Student } from '../types';
+import { createReminderBackend } from './reminderBackend.js';
+import { buildReminders, DEFAULT_SETTINGS, MAX_ATTEMPTS, tokenHash } from './reminderCore.js';
+import type { Student } from '../types.js';
 
 type Data = Record<string, unknown>;
 const copy = (value: unknown): unknown => {

@@ -1,6 +1,6 @@
-import { getAdminServices } from './firebaseAdmin';
-import { createReminderBackend } from './reminderBackend';
-import type { SchedulerDependencies, TestDependencies } from './httpHandlers';
+import { getAdminServices } from './firebaseAdmin.js';
+import { createReminderBackend } from './reminderBackend.js';
+import type { SchedulerDependencies, TestDependencies } from './httpHandlers.js';
 
 function backend() {
   const { db, messaging } = getAdminServices();

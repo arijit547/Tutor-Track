@@ -7,7 +7,8 @@
   "scripts": {
     "dev": "vite",
     "dev:api": "node --env-file-if-exists=.env.local --env-file-if-exists=.env.server.local --import tsx scripts/dev-api.ts",
-    "build": "vite build",
+    "build": "npm run check:server && vite build",
+    "check:server": "node scripts/check-server-build.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test services/*.test.ts server/*.test.ts",

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readServiceAccount } from './firebaseAdmin';
-import { PushError } from './errors';
+import { readServiceAccount } from './firebaseAdmin.js';
+import { PushError } from './errors.js';
 
 test('server credential parser decodes escaped newlines and accepts JSON alternative', () => {
   const fields = { FIREBASE_PROJECT_ID: 'tutortrack-f801e', FIREBASE_CLIENT_EMAIL: 'service@example.com', FIREBASE_PRIVATE_KEY: 'first\\nsecond' };

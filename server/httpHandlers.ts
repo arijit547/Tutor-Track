@@ -1,6 +1,6 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { PushError, safeErrorCode } from './errors';
-import { parseTestRequest, type TestRequest, type SweepSummary } from './reminderBackend';
+import { PushError, safeErrorCode } from './errors.js';
+import { parseTestRequest, type TestRequest, type SweepSummary } from './reminderBackend.js';
 
 export interface ApiRequest {
   method?: string;

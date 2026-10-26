@@ -40,6 +40,8 @@ npm test
 npm run build
 ```
 
+The build emits the API's TypeScript graph as Node ESM and imports it with native Node before building the frontend. This catches runtime import-resolution errors that TSX-based tests can hide. The check calls only unauthenticated/method guards and needs no Admin credential.
+
 For rules, install Java and run `npm --prefix rules-tests ci`, then `npm run rules:test`. Tests use a loopback emulator and `demo-tutortrack`, not the live database. See [rules tests](../rules-tests/README.md).
 
 `npm run dev` serves the frontend and proxies `/api` to port 3001. For API development, copy `server/.env.example` to ignored `.env.server.local`, fill the server values, and run `npm run dev:api` in a second terminal. The API runner binds only to `127.0.0.1`. Alternatively use `vercel dev`; `vite preview` serves frontend assets only. Keep server credentials out of publicly accessible development servers.

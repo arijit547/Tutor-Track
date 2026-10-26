@@ -1,4 +1,4 @@
-import { createTestHandler } from '../../server/httpHandlers';
-import { testDependencies } from '../../server/runtime';
+import { createTestHandler } from '../../server/httpHandlers.js';
+import { testDependencies } from '../../server/runtime.js';
 
 export default createTestHandler(testDependencies);

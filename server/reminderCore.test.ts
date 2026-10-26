@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import type { Student, Session, MonthlyBillingPlan } from '../types';
-import { appLink, billingInDhaka, buildReminders, canClaim, dhakaParts, DEFAULT_SETTINGS, financialHandledToday, invalidToken, pendingDevices, tokenHash } from './reminderCore';
+import type { Student, Session, MonthlyBillingPlan } from '../types.js';
+import { appLink, billingInDhaka, buildReminders, canClaim, dhakaParts, DEFAULT_SETTINGS, financialHandledToday, invalidToken, pendingDevices, tokenHash } from './reminderCore.js';
 
 function student(overrides: Partial<Student> = {}): Student {
   return {

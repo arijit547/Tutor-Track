@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createRemindersHandler, createTestHandler, cronAuthorized, type ApiRequest, type ApiResponse } from './httpHandlers';
-import { PushError } from './errors';
+import { createRemindersHandler, createTestHandler, cronAuthorized, type ApiRequest, type ApiResponse } from './httpHandlers.js';
+import { PushError } from './errors.js';
 
 function response() {
   const result = { statusCode: 0, body: undefined as unknown, headers: {} as Record<string, string> };

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
-import { getStudentBilling, getStudentPlans } from '../services/studentBilling';
-import type { Student } from '../types';
+import { getStudentBilling, getStudentPlans } from '../services/studentBilling.js';
+import type { Student } from '../types.js';
 
 export const TIME_ZONE = 'Asia/Dhaka';
 export const LEASE_MS = 10 * 60_000;

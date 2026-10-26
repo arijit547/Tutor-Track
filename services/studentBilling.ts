@@ -1,4 +1,4 @@
-import { BillingMode, MonthlyBillingPlan, Student } from '../types';
+import type { BillingMode, MonthlyBillingPlan, Student } from '../types.js';
 
 export const monthFromDate = (date: Date | string): string => {
   if (typeof date === 'string' && /^\d{4}-\d{2}(?:-\d{2})?$/.test(date)) return date.slice(0, 7);
