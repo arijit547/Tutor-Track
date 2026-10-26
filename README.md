@@ -10,9 +10,10 @@ TutorTrack is a focused tutor-management dashboard for students, schedules, sess
 - Session logging and payment tracking
 - **Teacher-only Personal Finance tab:** personal income/expense records, editing/deleting, monthly spending budget, category insights, filtered history, CSV export, and automatic inclusion of student tuition payments as read-only income
 - Tutor profile and password management
-- Browser notifications for upcoming classes
+- Firebase Web Push for classes, unpaid tuition and monthly salary (backend deployment required)
 - Offline local cache + pending Firebase sync queue
-- Optional browser geolocation for tuition-location session detection
+- Optional browser geolocation with account-specific auto-resume for session detection
+- Installable PWA with foreground and background notification handling
 - Firebase Email/Password Authentication + Cloud Firestore
 
 ## Stack
@@ -36,7 +37,7 @@ Then fill `.env.local` using your Firebase **Web App** configuration.
 
 ### Firebase console setup
 
-1. Create/select a Firebase project on the Spark plan.
+1. Create/select a Firebase project. The billing-free push backend uses Spark together with Vercel Functions and GitHub Actions; no Blaze upgrade is required.
 2. Authentication → Sign-in method → enable **Email/Password**.
 3. Create a **Cloud Firestore** database.
 4. Copy the contents of **the updated** `firestore.rules` into Firestore Rules and **publish** them (including `financeEntries` and `financeSettings`). Existing projects must republish rules for the new Finance feature to sync.
@@ -51,16 +52,32 @@ npm run build
 npm run preview
 ```
 
-## GitHub push
+## Location and push notifications (Phase 1)
 
-```bash
-git init
-git add .
-git commit -m "Redesign TutorTrack frontend"
-git branch -M main
-git remote add origin YOUR_REPOSITORY_URL
-git push -u origin main
+The implementation stays on React + Firebase Spark + Vercel Hobby. GitHub Actions requests a reminder sweep about every five minutes, using free standard Linux runners in this public repository. No APK or Firebase Blaze plan is required. See [setup](docs/PHASE1_SETUP.md), [scheduler activation](docs/FREE_SCHEDULER.md), and [current deployment status](docs/PHASE1_DEPLOYMENT_STATUS.md).
+
+- The location button checks permission before saving an account-specific preference. Later visits resume only if permission is already granted. GPS stops when TutorTrack closes.
+- **Profile ? Notifications & location** contains device opt-out, reminder preferences, **Send test notification**, and **Test after closing app**.
+- Immediate tests call the authenticated same-origin Vercel route `/api/push/test`. The scheduler calls secret-protected `/api/push/reminders`. Server credentials never enter the frontend build.
+- The bundled `/firebase-messaging-sw.js` uses the installed Firebase SDK and the same public configuration as the frontend. It displays data-only background messages only for its current account binding. Foreground messages appear in the app.
+- Logout removes this device's token while authenticated, clears the worker binding and closes displayed notifications. An enrolled device must reconnect before server token cleanup completes.
+- GitHub may delay or drop scheduled runs. Reminders are approximate; a delayed class reminder expires when class begins. Delayed test delivery has no fixed six-minute guarantee.
+- The account-specific student cache does not automatically import old unowned `tutortrack_data_v1` data into another tutor's account.
+
+```sh
+npm ci
+npm run typecheck
+npm test
+npm run build
 ```
+
+Security rules can also be tested locally: `npm --prefix rules-tests ci`, then `npm run rules:test` (Java required; see [rules-tests](rules-tests/README.md)).
+
+## GitHub and deployment
+
+This checkout tracks `test-finance-firebase`; Vercel is connected to `arijit547/Tutor-Track`. Publish the tested source on that branch for a preview, then promote only after configuring the server and verifying device delivery. Avoid committing environment files or service-account JSON.
+
+GitHub scheduled workflows run only from the repository default branch (`main`). Copy/merge the scheduler workflow there and enable it only after a manual check succeeds; keeping it only on the testing branch does not start automatic reminders. See [scheduler setup](docs/FREE_SCHEDULER.md).
 
 ## Security
 

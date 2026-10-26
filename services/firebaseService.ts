@@ -63,6 +63,14 @@ export const firebaseService = {
           name: studentData.name,
           subject: studentData.subject,
           ratePerSession: studentData.ratePerSession,
+          legacyRatePerSession: studentData.legacyRatePerSession,
+          monthlySalary: studentData.monthlySalary,
+          billingMode: studentData.billingMode,
+          sessionsPerMonth: studentData.sessionsPerMonth,
+          billingStartDate: studentData.billingStartDate,
+          billingPlans: studentData.billingPlans,
+          billingPausedMonths: studentData.billingPausedMonths,
+          billingPausedFromMonth: studentData.billingPausedFromMonth,
           scheduleDays: studentData.scheduleDays,
           scheduleTime: studentData.scheduleTime,
           email: studentData.email,
@@ -386,7 +394,10 @@ export const firebaseService = {
   // DATA MIGRATION
   async migrateLocalDataToFirebase(userId: string): Promise<void> {
     try {
-      const localStudents = localStorage.getItem('tutortrack_data_v1');
+      // Legacy unscoped caches have no provable owner and must not be imported
+      // into whichever account happens to sign up on a shared browser.
+      const cacheKey = `tutortrack_data_v1_${userId}`;
+      const localStudents = localStorage.getItem(cacheKey);
       if (!localStudents) return;
 
       const students: Student[] = JSON.parse(localStudents);
@@ -406,6 +417,14 @@ export const firebaseService = {
           name: student.name,
           subject: student.subject,
           ratePerSession: student.ratePerSession,
+          ...(student.legacyRatePerSession != null && { legacyRatePerSession: student.legacyRatePerSession }),
+          ...(student.monthlySalary != null && { monthlySalary: student.monthlySalary }),
+          ...(student.billingMode && { billingMode: student.billingMode }),
+          ...(student.sessionsPerMonth != null && { sessionsPerMonth: student.sessionsPerMonth }),
+          ...(student.billingStartDate && { billingStartDate: student.billingStartDate }),
+          ...(student.billingPlans && { billingPlans: student.billingPlans }),
+          ...(student.billingPausedMonths && { billingPausedMonths: student.billingPausedMonths }),
+          ...(student.billingPausedFromMonth && { billingPausedFromMonth: student.billingPausedFromMonth }),
           scheduleDays: student.scheduleDays,
           scheduleTime: student.scheduleTime,
           active: student.active,
@@ -471,7 +490,7 @@ export const firebaseService = {
       }
 
       // Clear localStorage after successful migration
-      localStorage.removeItem('tutortrack_data_v1');
+      localStorage.removeItem(cacheKey);
     } catch (error) {
       console.error('Error migrating local data:', error);
       throw error;

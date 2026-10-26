@@ -1,0 +1,499 @@
+--- a/App.tsx
++++ b/App.tsx
+@@ -23,6 +23,7 @@
+ import { BrandLogo } from './components/BrandLogo';
+ import { DashboardSkeleton } from './components/DashboardSkeleton';
+ import { PersonalFinance } from './components/PersonalFinance';
++import { getStudentBilling } from './services/studentBilling';
+ 
+ const STORAGE_KEY = 'tutortrack_data_v1';
+ 
+@@ -496,10 +497,7 @@
+   // Calculate outstanding for payment modal default
+   const getOutstandingBalance = (student?: Student) => {
+     if (!student) return 0;
+-    const totalSessions = student.sessions.filter(s => s.status === 'completed' || s.status === 'missed').length;
+-    const totalDue = totalSessions * student.ratePerSession;
+-    const totalPaid = student.payments.reduce((sum, p) => sum + p.amount, 0);
+-    return Math.max(0, totalDue - totalPaid);
++    return getStudentBilling(student).outstanding;
+   };
+ 
+   return (
+--- a/types.ts
++++ b/types.ts
+@@ -34,13 +34,31 @@
+   notes?: string;
+ }
+ 
++export type BillingMode = 'session-target' | 'calendar-month';
++
++export interface MonthlyBillingPlan {
++  // A contract version starts on the first day of its effective calendar month.
++  effectiveMonth: string; // YYYY-MM
++  monthlySalary: number;
++  billingMode: BillingMode;
++  sessionsPerMonth?: number; // Required in session-target mode; optional planning estimate otherwise.
++}
++
+ export interface Student {
+   id: string;
+   name: string;
+   subject: string;
+   scheduleDays: DayOfWeek[];
+   scheduleTime: string; // Format "HH:MM" 24h
+-  ratePerSession: number;
++  ratePerSession: number; // Legacy compatibility / estimated rate, not authoritative for monthly plans.
++  legacyRatePerSession?: number; // Preserve historical billing when converting an existing student.
++  monthlySalary?: number;
++  billingMode?: BillingMode;
++  sessionsPerMonth?: number;
++  billingStartDate?: string; // YYYY-MM-DD. The first month is billed in full, without proration.
++  billingPlans?: MonthlyBillingPlan[];
++  billingPausedMonths?: string[];
++  billingPausedFromMonth?: string;
+   email?: string;
+   sessions: Session[];
+   payments: Payment[];
+--- a/services/firebaseService.ts
++++ b/services/firebaseService.ts
+@@ -63,6 +63,14 @@
+           name: studentData.name,
+           subject: studentData.subject,
+           ratePerSession: studentData.ratePerSession,
++          legacyRatePerSession: studentData.legacyRatePerSession,
++          monthlySalary: studentData.monthlySalary,
++          billingMode: studentData.billingMode,
++          sessionsPerMonth: studentData.sessionsPerMonth,
++          billingStartDate: studentData.billingStartDate,
++          billingPlans: studentData.billingPlans,
++          billingPausedMonths: studentData.billingPausedMonths,
++          billingPausedFromMonth: studentData.billingPausedFromMonth,
+           scheduleDays: studentData.scheduleDays,
+           scheduleTime: studentData.scheduleTime,
+           email: studentData.email,
+@@ -406,6 +414,14 @@
+           name: student.name,
+           subject: student.subject,
+           ratePerSession: student.ratePerSession,
++          ...(student.legacyRatePerSession != null && { legacyRatePerSession: student.legacyRatePerSession }),
++          ...(student.monthlySalary != null && { monthlySalary: student.monthlySalary }),
++          ...(student.billingMode && { billingMode: student.billingMode }),
++          ...(student.sessionsPerMonth != null && { sessionsPerMonth: student.sessionsPerMonth }),
++          ...(student.billingStartDate && { billingStartDate: student.billingStartDate }),
++          ...(student.billingPlans && { billingPlans: student.billingPlans }),
++          ...(student.billingPausedMonths && { billingPausedMonths: student.billingPausedMonths }),
++          ...(student.billingPausedFromMonth && { billingPausedFromMonth: student.billingPausedFromMonth }),
+           scheduleDays: student.scheduleDays,
+           scheduleTime: student.scheduleTime,
+           active: student.active,
+--- /dev/null
++++ b/services/studentBilling.ts
+@@ -0,0 +1,118 @@
++import { BillingMode, MonthlyBillingPlan, Student } from '../types';
++
++export const monthFromDate = (date: Date | string): string => {
++  if (typeof date === 'string' && /^\d{4}-\d{2}(?:-\d{2})?$/.test(date)) return date.slice(0, 7);
++  const value = new Date(date);
++  if (Number.isNaN(value.getTime())) return monthFromDate(new Date());
++  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}`;
++};
++
++export const nextMonth = (month: string): string => {
++  const [year, mon] = month.split('-').map(Number);
++  return monthFromDate(new Date(year, mon, 1));
++};
++
++const roundMoney = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
++const validMoney = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value) && value > 0;
++const validCount = (value: unknown): value is number => typeof value === 'number' && Number.isInteger(value) && value > 0;
++
++export const getStudentPlans = (student: Student): MonthlyBillingPlan[] => {
++  if (student.billingPlans?.length) return [...student.billingPlans].sort((a, b) => a.effectiveMonth.localeCompare(b.effectiveMonth));
++  // Backward compatibility if the monthly fields exist without plan history.
++  if (validMoney(student.monthlySalary) && student.billingMode) {
++    return [{
++      effectiveMonth: monthFromDate(student.billingStartDate || student.joinedDate),
++      monthlySalary: student.monthlySalary,
++      billingMode: student.billingMode,
++      sessionsPerMonth: student.sessionsPerMonth,
++    }];
++  }
++  return [];
++};
++
++export const planForMonth = (student: Student, month: string): MonthlyBillingPlan | undefined =>
++  getStudentPlans(student).filter(plan => plan.effectiveMonth <= month).at(-1);
++
++export const monthlyRateLabel = (student: Student, month = monthFromDate(new Date())) => {
++  const plan = planForMonth(student, month);
++  const upcoming = getStudentPlans(student)[0];
++  if (plan) return `৳${plan.monthlySalary.toLocaleString('en-BD')}/month`;
++  const legacy = student.legacyRatePerSession ?? student.ratePerSession;
++  return `৳${legacy.toLocaleString('en-BD')}/session${upcoming ? ` (monthly from ${upcoming.effectiveMonth})` : ''}`;
++};
++
++const isPaused = (student: Student, month: string) =>
++  (student.billingPausedMonths || []).includes(month) ||
++  (Boolean(student.billingPausedFromMonth) && month >= (student.billingPausedFromMonth || '9999-99'));
++
++export interface StudentBillingSummary {
++  earned: number;
++  paid: number;
++  outstanding: number;
++  completedSessions: number;
++  currentMonthSessions: number;
++  currentMonthEarned: number;
++  currentMonthTarget?: number;
++  currentMonthComplete: boolean;
++  currentMode: BillingMode | 'legacy';
++}
++
++/**
++ * Session-target billing: completed sessions earn monthlySalary / target, capped
++ * at one full monthly salary per calendar month. Missed/cancelled do not count.
++ * Calendar-month billing: a full month's salary is earned after the month ends;
++ * logged sessions are for attendance only. No automatic prorating.
++ * Legacy students retain their old per-session calculations until a monthly
++ * billing plan takes effect (including previously billable missed sessions).
++ */
++export const getStudentBilling = (student: Student, asOf = new Date()): StudentBillingSummary => {
++  const plans = getStudentPlans(student);
++  const thisMonth = monthFromDate(asOf);
++  const completedSessions = student.sessions.filter(s => s.status === 'completed').length;
++  const totalPaid = roundMoney(student.payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0));
++  const monthSessionCount = (month: string) => student.sessions.filter(s => s.status === 'completed' && monthFromDate(s.date) === month).length;
++  const currentMonthSessions = monthSessionCount(thisMonth);
++
++  if (!plans.length) {
++    const billable = student.sessions.filter(s => s.status === 'completed' || s.status === 'missed');
++    const earned = roundMoney(billable.length * (student.ratePerSession || 0));
++    return { earned, paid: totalPaid, outstanding: Math.max(0, roundMoney(earned - totalPaid)), completedSessions,
++      currentMonthSessions, currentMonthEarned: roundMoney(billable.filter(s => monthFromDate(s.date) === thisMonth).length * (student.ratePerSession || 0)),
++      currentMonthComplete: false, currentMode: 'legacy' };
++  }
++
++  const initialMonth = plans[0].effectiveMonth;
++  const historicalLegacy = student.sessions.filter(s =>
++    monthFromDate(s.date) < initialMonth && (s.status === 'completed' || s.status === 'missed')
++  );
++  let earned = roundMoney(historicalLegacy.length * (student.legacyRatePerSession ?? student.ratePerSession ?? 0));
++  let currentMonthEarned = 0;
++  let currentMonthTarget: number | undefined;
++  let currentMonthComplete = false;
++  let currentMode: BillingMode | 'legacy' = 'legacy';
++
++  // Guard against accidentally iterating over an unreasonably large time range.
++  for (let month = initialMonth, count = 0; month <= thisMonth && count < 1200; month = nextMonth(month), count++) {
++    const plan = planForMonth(student, month);
++    if (!plan || !validMoney(plan.monthlySalary) || isPaused(student, month)) continue;
++    let bill = 0;
++    const countDone = monthSessionCount(month);
++    if (plan.billingMode === 'session-target') {
++      const target = validCount(plan.sessionsPerMonth) ? plan.sessionsPerMonth : 1;
++      bill = roundMoney(plan.monthlySalary * Math.min(countDone, target) / target);
++      if (month === thisMonth) { currentMonthTarget = target; currentMonthComplete = countDone >= target; }
++    } else {
++      bill = month < thisMonth ? plan.monthlySalary : 0;
++      if (month === thisMonth) currentMonthComplete = false;
++    }
++    earned += bill;
++    if (month === thisMonth) {
++      currentMonthEarned = bill;
++      currentMode = plan.billingMode;
++    }
++  }
++  earned = roundMoney(earned);
++  return { earned, paid: totalPaid, outstanding: Math.max(0, roundMoney(earned - totalPaid)),
++    completedSessions, currentMonthSessions, currentMonthEarned, currentMonthTarget,
++    currentMonthComplete, currentMode };
++};
+--- a/components/StudentFormModal.tsx
++++ b/components/StudentFormModal.tsx
+@@ -1,7 +1,8 @@
+ import React, { useState, useEffect } from 'react';
+ import { Modal } from './Modal';
+ import { Button } from './Button';
+-import { Student, DayOfWeek } from '../types';
++import { Student, DayOfWeek, BillingMode, MonthlyBillingPlan } from '../types';
++import { getStudentPlans, monthFromDate, nextMonth } from '../services/studentBilling';
+ import { MapPin, Map, Mail, UserRound, BookOpen, Banknote, Clock3 } from 'lucide-react';
+ import { getCurrentLocation } from '../services/locationService.browser';
+ import { MapPicker } from './MapPicker';
+@@ -18,7 +19,11 @@
+ export const StudentFormModal: React.FC<StudentFormModalProps> = ({ isOpen, onClose, onSubmit, student }) => {
+   const [name, setName] = useState('');
+   const [subject, setSubject] = useState('');
+-  const [ratePerSession, setRatePerSession] = useState('');
++  const [monthlySalary, setMonthlySalary] = useState('');
++  const [billingMode, setBillingMode] = useState<BillingMode>('session-target');
++  const [sessionsPerMonth, setSessionsPerMonth] = useState('12');
++  const [billingStartDate, setBillingStartDate] = useState(() => new Date().toLocaleDateString('en-CA'));
++
+   const [scheduleTime, setScheduleTime] = useState('10:00');
+   const [scheduleDays, setScheduleDays] = useState<DayOfWeek[]>(['Mon']);
+   const [email, setEmail] = useState('');
+@@ -31,11 +36,19 @@
+   useEffect(() => {
+     if (!isOpen) return;
+     if (student) {
+-      setName(student.name); setSubject(student.subject); setRatePerSession(student.ratePerSession.toString());
++      const plans = getStudentPlans(student);
++      const current = plans[plans.length - 1];
++      setName(student.name); setSubject(student.subject);
++      setMonthlySalary(current?.monthlySalary?.toString() || '');
++      setBillingMode(current?.billingMode || 'session-target');
++      setSessionsPerMonth(current?.sessionsPerMonth?.toString() || '12');
++      setBillingStartDate(student.billingStartDate || (student.joinedDate?.slice(0, 10)) || new Date().toLocaleDateString('en-CA'));
+       setScheduleTime(student.scheduleTime); setScheduleDays(student.scheduleDays); setEmail(student.email || '');
+       setActive(student.active); setLocation(student.location);
+     } else {
+-      setName(''); setSubject(''); setRatePerSession(''); setScheduleTime('10:00'); setScheduleDays(['Mon']);
++      setName(''); setSubject(''); setMonthlySalary(''); setBillingMode('session-target');
++      setSessionsPerMonth('12'); setBillingStartDate(new Date().toLocaleDateString('en-CA'));
++      setScheduleTime('10:00'); setScheduleDays(['Mon']);
+       setEmail(''); setActive(true); setLocation(undefined);
+     }
+     setErrors({});
+@@ -45,7 +58,10 @@
+     const next: Record<string, string> = {};
+     if (!name.trim()) next.name = 'Student name is required';
+     if (!subject.trim()) next.subject = 'Subject is required';
+-    if (!ratePerSession || Number(ratePerSession) <= 0) next.rate = 'Enter a valid session rate';
++    if (!monthlySalary || !Number.isFinite(Number(monthlySalary)) || Number(monthlySalary) <= 0) next.salary = 'Enter a valid monthly salary';
++    if (billingMode === 'session-target' && (!sessionsPerMonth || !Number.isInteger(Number(sessionsPerMonth)) || Number(sessionsPerMonth) < 1)) next.sessions = 'Set the required number of sessions (at least 1)';
++    if (sessionsPerMonth && (!Number.isInteger(Number(sessionsPerMonth)) || Number(sessionsPerMonth) < 1)) next.sessions = 'Use a positive whole number';
++    if (!/^\d{4}-\d{2}-\d{2}$/.test(billingStartDate) || Number.isNaN(Date.parse(billingStartDate))) next.start = 'Choose a valid billing start date';
+     if (!scheduleDays.length) next.days = 'Choose at least one day';
+     setErrors(next);
+     return Object.keys(next).length === 0;
+@@ -54,11 +70,47 @@
+   const handleSubmit = (e: React.FormEvent) => {
+     e.preventDefault();
+     if (!validateForm()) return;
+-    onSubmit({ name: name.trim(), subject: subject.trim(), ratePerSession: Number(ratePerSession), scheduleTime, scheduleDays, email: email.trim() || undefined, active, location });
++    const monthly = Number(monthlySalary);
++    const count = sessionsPerMonth ? Number(sessionsPerMonth) : undefined;
++    const equivalentRate = count ? Math.round(monthly / count * 100) / 100 : 0;
++    const savedPlans = student ? getStudentPlans(student) : [];
++    const latest = savedPlans[savedPlans.length - 1];
++    const planChanged = !latest || latest.monthlySalary !== monthly || latest.billingMode !== billingMode || latest.sessionsPerMonth !== count;
++    const hasRecordedHistory = !!student && (student.sessions.length > 0 || student.payments.length > 0);
++    const monthNow = monthFromDate(new Date());
++    const effectiveMonth = !student ? monthFromDate(billingStartDate)
++      : hasRecordedHistory ? nextMonth(monthNow) : monthNow;
++    const newPlan: MonthlyBillingPlan = { effectiveMonth, monthlySalary: monthly, billingMode, ...(count ? { sessionsPerMonth: count } : {}) };
++    const billingPlans = planChanged ? [...savedPlans.filter(p => p.effectiveMonth !== effectiveMonth), newPlan]
++      .sort((a, b) => a.effectiveMonth.localeCompare(b.effectiveMonth)) : savedPlans;
++
++    let pausedMonths = [...(student?.billingPausedMonths || [])];
++    let pausedFromMonth = student?.billingPausedFromMonth || (!student && !active ? monthFromDate(billingStartDate) : '');
++    if (student?.active && !active) {
++      pausedFromMonth = nextMonth(monthNow); // The current calendar month remains billable.
++    } else if (student && !student.active && active && pausedFromMonth) {
++      for (let month = pausedFromMonth, i = 0; month < monthNow && i < 1200; month = nextMonth(month), i++) {
++        if (!pausedMonths.includes(month)) pausedMonths.push(month);
++      }
++      pausedFromMonth = '';
++    }
++
++    onSubmit({
++      name: name.trim(), subject: subject.trim(), scheduleTime, scheduleDays,
++      email: email.trim() || undefined, active, location,
++      monthlySalary: monthly, billingMode, sessionsPerMonth: count,
++      ratePerSession: equivalentRate,
++      ...(student && { legacyRatePerSession: student.legacyRatePerSession ?? student.ratePerSession }),
++      billingStartDate: student?.billingStartDate || billingStartDate,
++      billingPlans, billingPausedMonths: pausedMonths, billingPausedFromMonth: pausedFromMonth,
++    });
+     onClose();
+   };
+ 
+   const toggleDay = (day: DayOfWeek) => setScheduleDays(prev => prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]);
++  const estimatedRate = Number(monthlySalary) > 0 && Number(sessionsPerMonth) > 0
++    ? Number(monthlySalary) / Number(sessionsPerMonth) : 0;
++  const historyExists = !!student && (student.sessions.length > 0 || student.payments.length > 0);
+   const field = 'w-full rounded-xl border bg-[#fbfaf7] px-3.5 py-2.5 text-sm outline-none';
+   const fieldBorder = (key: string) => errors[key] ? 'border-[#d98378]' : 'border-[#dcd8d0]';
+ 
+@@ -75,14 +127,53 @@
+             </Field>
+           </div>
+ 
+-          <div className="grid sm:grid-cols-2 gap-3">
+-            <Field label="Rate per session (BDT)" error={errors.rate} icon={<Banknote className="w-4 h-4" />}>
+-              <input type="number" min="1" step="1" value={ratePerSession} onChange={e => setRatePerSession(e.target.value)} placeholder="1000" className={`${field} ${fieldBorder('rate')} pl-10`} />
+-            </Field>
+-            <Field label="Class time" icon={<Clock3 className="w-4 h-4" />}>
+-              <input type="time" value={scheduleTime} onChange={e => setScheduleTime(e.target.value)} className={`${field} border-[#dcd8d0] pl-10`} />
+-            </Field>
+-          </div>
++          <div className="rounded-[20px] border border-[#e5e1d9] bg-[#faf8f3] p-4 space-y-4">
++            <div>
++              <p className="text-sm font-extrabold text-[#39364d]">Monthly tuition agreement</p>
++              <p className="mt-1 text-xs text-[#888394]">Set the monthly salary first. We calculate an equivalent per-session rate automatically.</p>
++            </div>
++            <div className="grid sm:grid-cols-2 gap-3">
++              <Field label="Salary per month (BDT)" error={errors.salary} icon={<Banknote className="w-4 h-4" />}>
++                <input type="number" min="1" step="0.01" value={monthlySalary} onChange={e => setMonthlySalary(e.target.value)} placeholder="6000" className={`${field} ${fieldBorder('salary')} pl-10`} />
++              </Field>
++              <Field label="Billing starts" error={errors.start} icon={<Clock3 className="w-4 h-4" />}>
++                <input type="date" value={billingStartDate} onChange={e => setBillingStartDate(e.target.value)} disabled={!!student} className={`${field} ${fieldBorder('start')} pl-10 disabled:opacity-60`} />
++              </Field>
++            </div>
++            <div>
++              <p className="text-xs font-bold text-[#666374] mb-2">When is a tuition month completed?</p>
++              <div className="grid sm:grid-cols-2 gap-2">
++                <button type="button" onClick={() => setBillingMode('session-target')} aria-pressed={billingMode === 'session-target'} className={`text-left rounded-2xl border p-3 transition-all ${billingMode === 'session-target' ? 'border-[#56518f] bg-[#eeedf7] text-[#34316f]' : 'border-[#dedbd4] bg-white text-[#676477]'}`}>
++                  <span className="block text-xs font-extrabold">Fixed sessions per month</span>
++                  <span className="block mt-1 text-[11px] leading-4">Pay is earned by completed sessions, up to one monthly salary.</span>
++                </button>
++                <button type="button" onClick={() => setBillingMode('calendar-month')} aria-pressed={billingMode === 'calendar-month'} className={`text-left rounded-2xl border p-3 transition-all ${billingMode === 'calendar-month' ? 'border-[#56518f] bg-[#eeedf7] text-[#34316f]' : 'border-[#dedbd4] bg-white text-[#676477]'}`}>
++                  <span className="block text-xs font-extrabold">Calendar month</span>
++                  <span className="block mt-1 text-[11px] leading-4">Full monthly salary is due when the calendar month ends, regardless of sessions.</span>
++                </button>
++              </div>
++            </div>
++            <div className="grid sm:grid-cols-2 gap-3 items-end">
++              <Field label={billingMode === 'session-target' ? 'Required sessions per month' : 'Planned sessions per month (optional)'} error={errors.sessions}>
++                <input type="number" min="1" step="1" value={sessionsPerMonth} onChange={e => setSessionsPerMonth(e.target.value)} placeholder="12" className={`${field} ${fieldBorder('sessions')}`} />
++              </Field>
++              <div className="rounded-xl border border-[#ded9ed] bg-white px-4 py-3">
++                <p className="text-[10px] font-bold uppercase tracking-[.08em] text-[#918ca0]">Calculated per-session equivalent</p>
++                <p className="mt-1 text-lg font-extrabold text-[#34316f]">{estimatedRate ? `৳${estimatedRate.toLocaleString('en-BD', { maximumFractionDigits: 2 })}` : '—'}</p>
++              </div>
++            </div>
++            <p className="text-[11px] leading-5 text-[#777287]">
++              {billingMode === 'session-target'
++                ? 'Only completed sessions count. Extra sessions beyond the monthly target do not add charges automatically. Each calendar month has its own target.'
++                : 'The estimated per-session amount is informational only. Attendance does not change the fixed monthly fee; the fee becomes due after the month ends.'}
++              {' '}The first calendar month is billed in full (no proration).
++            </p>
++            {student && historyExists && <p className="text-[11px] font-semibold text-[#6c5687]">If you change salary or billing method, the new contract starts next calendar month so past billing stays unchanged.</p>}
++          </div>
++
++          <Field label="Class time" icon={<Clock3 className="w-4 h-4" />}>
++            <input type="time" value={scheduleTime} onChange={e => setScheduleTime(e.target.value)} className={`${field} border-[#dcd8d0] pl-10`} />
++          </Field>
+ 
+           <div>
+             <label className="block text-xs font-bold text-[#666374] mb-2">Weekly schedule</label>
+--- a/components/StudentCard.tsx
++++ b/components/StudentCard.tsx
+@@ -2,6 +2,7 @@
+ import { Student } from '../types';
+ import { CalendarDays, Clock3, WalletCards, ArrowUpRight } from 'lucide-react';
+ import { Button } from './Button';
++import { getStudentBilling, monthlyRateLabel } from '../services/studentBilling';
+ 
+ interface StudentCardProps {
+   student: Student;
+@@ -10,11 +11,9 @@
+ }
+ 
+ export const StudentCard: React.FC<StudentCardProps> = ({ student, onView, onLogSession }) => {
+-  const billableSessions = student.sessions.filter(s => s.status === 'completed' || s.status === 'missed').length;
+-  const completedSessions = student.sessions.filter(s => s.status === 'completed').length;
+-  const totalDue = billableSessions * student.ratePerSession;
+-  const totalPaid = student.payments.reduce((sum, p) => sum + p.amount, 0);
+-  const balance = Math.max(0, totalDue - totalPaid);
++  const billing = getStudentBilling(student);
++  const completedSessions = billing.completedSessions;
++  const balance = billing.outstanding;
+   const initials = student.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+ 
+   return (
+@@ -48,7 +47,7 @@
+ 
+       <div className="mt-4 flex items-center justify-between text-xs text-[#7f7c8e]">
+         <span className="inline-flex items-center gap-1.5"><Clock3 className="w-3.5 h-3.5" /> {completedSessions} completed</span>
+-        <span>৳{student.ratePerSession.toLocaleString()}/session</span>
++        <span>{monthlyRateLabel(student)}</span>
+       </div>
+ 
+       <div className="mt-5 flex gap-2.5">
+--- a/components/StudentDetail.tsx
++++ b/components/StudentDetail.tsx
+@@ -1,6 +1,7 @@
+ import React, { useState } from 'react';
+ import { Student } from '../types';
+ import { Button } from './Button';
++import { getStudentBilling, monthlyRateLabel } from '../services/studentBilling';
+ import { ArrowLeft, Plus, CheckCircle2, XCircle, AlertCircle, WalletCards, Pencil, Trash2, CalendarDays, Clock3, Mail, CircleDollarSign } from 'lucide-react';
+ 
+ interface StudentDetailProps {
+@@ -15,11 +16,11 @@
+ export const StudentDetail: React.FC<StudentDetailProps> = ({ student, onBack, onLogSession, onLogPayment, onEditStudent, onDeleteStudent }) => {
+   const [activeTab, setActiveTab] = useState<'sessions' | 'payments'>('sessions');
+ 
+-  const billableSessions = student.sessions.filter(s => s.status === 'completed' || s.status === 'missed').length;
+-  const completedSessions = student.sessions.filter(s => s.status === 'completed').length;
+-  const totalDue = billableSessions * student.ratePerSession;
+-  const totalPaid = student.payments.reduce((sum, p) => sum + p.amount, 0);
+-  const balance = Math.max(0, totalDue - totalPaid);
++  const billing = getStudentBilling(student);
++  const completedSessions = billing.completedSessions;
++  const totalDue = billing.earned;
++  const totalPaid = billing.paid;
++  const balance = billing.outstanding;
+   const initials = student.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+ 
+   return (
+@@ -36,7 +37,7 @@
+                   <h1 className="text-2xl font-extrabold tracking-[-.04em] text-[#29283f]">{student.name}</h1>
+                   <span className={`px-2.5 py-1 rounded-full text-[10px] uppercase tracking-[.08em] font-extrabold ${student.active ? 'bg-[#edf7f1] text-[#397d5c]' : 'bg-[#f0eef1] text-[#777481]'}`}>{student.active ? 'Active' : 'Inactive'}</span>
+                 </div>
+-                <p className="mt-1 text-sm text-[#807d8c]">{student.subject} · ৳{student.ratePerSession.toLocaleString()} per session</p>
++                <p className="mt-1 text-sm text-[#807d8c]">{student.subject} · {monthlyRateLabel(student)}</p>
+                 <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs text-[#7d7a89]">
+                   <span className="inline-flex items-center gap-1.5"><CalendarDays className="w-3.5 h-3.5 text-[#69659b]" /> {student.scheduleDays.join(' · ')}</span>
+                   <span className="inline-flex items-center gap-1.5"><Clock3 className="w-3.5 h-3.5 text-[#69659b]" /> {student.scheduleTime}</span>
+@@ -68,6 +69,20 @@
+           ))}
+         </div>
+       </section>
++
++      {billing.currentMode !== 'legacy' && (
++        <div className="tt-card rounded-[22px] px-5 py-4 border border-[#e7e2d9] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
++          <div>
++            <p className="text-xs font-extrabold text-[#39354c]">Current month's billing</p>
++            <p className="mt-1 text-xs text-[#817c8a]">
++              {billing.currentMode === 'session-target'
++                ? `${billing.currentMonthSessions} of ${billing.currentMonthTarget} completed sessions · ${billing.currentMonthComplete ? 'Monthly target reached' : 'In progress'}`
++                : `${billing.currentMonthSessions} sessions recorded · Monthly fee becomes due after month-end`}
++            </p>
++          </div>
++          <p className="text-lg font-extrabold text-[#4e4a82]">৳{billing.currentMonthEarned.toLocaleString('en-BD', { maximumFractionDigits: 2 })} billed this month</p>
++        </div>
++      )}
+ 
+       <section className="tt-card rounded-[24px] overflow-hidden">
+         <div className="px-4 sm:px-6 pt-4 border-b border-[#ece9e3] flex gap-6">
+--- a/components/Dashboard.tsx
++++ b/components/Dashboard.tsx
+@@ -4,6 +4,7 @@
+ import { StudentCard } from './StudentCard';
+ import { Users, WalletCards, CalendarCheck2, ReceiptText, Plus, ArrowRight, Clock3, Sparkles, BookOpenCheck } from 'lucide-react';
+ import { Button } from './Button';
++import { getStudentBilling, monthlyRateLabel } from '../services/studentBilling';
+ 
+ interface DashboardProps {
+   students: Student[];
+@@ -16,7 +17,7 @@
+ export const Dashboard: React.FC<DashboardProps> = ({ students, tutorName, onViewStudent, onLogSession, onAddStudent }) => {
+   const activeStudents = students.filter(s => s.active).length;
+   const totalSessions = students.reduce((acc, s) => acc + s.sessions.filter(sess => sess.status === 'completed').length, 0);
+-  const totalEarnings = students.reduce((acc, s) => acc + s.sessions.filter(sess => sess.status === 'completed' || sess.status === 'missed').length * s.ratePerSession, 0);
++  const totalEarnings = students.reduce((acc, s) => acc + getStudentBilling(s).earned, 0);
+   const totalCollected = students.reduce((acc, s) => acc + s.payments.reduce((pAcc, p) => pAcc + p.amount, 0), 0);
+   const outstanding = Math.max(0, totalEarnings - totalCollected);
+ 
+@@ -82,7 +83,7 @@
+                   <div className="h-10 w-[3px] rounded-full bg-[#ddd9e8]" />
+                   <button onClick={() => onViewStudent(student.id)} className="min-w-0 flex-1 text-left group">
+                     <p className="font-bold text-[#333148] truncate group-hover:text-[#56518f] transition-colors">{student.name}</p>
+-                    <p className="mt-0.5 text-xs text-[#8c8998] truncate">{student.subject} · ৳{student.ratePerSession.toLocaleString()}/session</p>
++                    <p className="mt-0.5 text-xs text-[#8c8998] truncate">{student.subject} · {monthlyRateLabel(student)}</p>
+                   </button>
+                   <Button size="sm" variant="secondary" onClick={() => onLogSession(student.id)}>Log</Button>
+                 </div>

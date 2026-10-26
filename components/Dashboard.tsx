@@ -4,6 +4,7 @@ import { StatsCard } from './StatsCard';
 import { StudentCard } from './StudentCard';
 import { Users, WalletCards, CalendarCheck2, ReceiptText, Plus, ArrowRight, Clock3, Sparkles, BookOpenCheck } from 'lucide-react';
 import { Button } from './Button';
+import { getStudentBilling, monthlyRateLabel } from '../services/studentBilling';
 
 interface DashboardProps {
   students: Student[];
@@ -16,7 +17,7 @@ interface DashboardProps {
 export const Dashboard: React.FC<DashboardProps> = ({ students, tutorName, onViewStudent, onLogSession, onAddStudent }) => {
   const activeStudents = students.filter(s => s.active).length;
   const totalSessions = students.reduce((acc, s) => acc + s.sessions.filter(sess => sess.status === 'completed').length, 0);
-  const totalEarnings = students.reduce((acc, s) => acc + s.sessions.filter(sess => sess.status === 'completed' || sess.status === 'missed').length * s.ratePerSession, 0);
+  const totalEarnings = students.reduce((acc, s) => acc + getStudentBilling(s).earned, 0);
   const totalCollected = students.reduce((acc, s) => acc + s.payments.reduce((pAcc, p) => pAcc + p.amount, 0), 0);
   const outstanding = Math.max(0, totalEarnings - totalCollected);
 
@@ -82,7 +83,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ students, tutorName, onVie
                   <div className="h-10 w-[3px] rounded-full bg-[#ddd9e8]" />
                   <button onClick={() => onViewStudent(student.id)} className="min-w-0 flex-1 text-left group">
                     <p className="font-bold text-[#333148] truncate group-hover:text-[#56518f] transition-colors">{student.name}</p>
-                    <p className="mt-0.5 text-xs text-[#8c8998] truncate">{student.subject} · ৳{student.ratePerSession.toLocaleString()}/session</p>
+                    <p className="mt-0.5 text-xs text-[#8c8998] truncate">{student.subject} · {monthlyRateLabel(student)}</p>
                   </button>
                   <Button size="sm" variant="secondary" onClick={() => onLogSession(student.id)}>Log</Button>
                 </div>

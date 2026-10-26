@@ -10,6 +10,7 @@ import {
 import { auth, isFirebaseConfigured } from '../services/firebase';
 import { firebaseService } from '../services/firebaseService';
 import { User, UserProfile } from '../types';
+import { cleanupPushOnLogout } from '../services/pushService';
 
 export interface AuthContextType {
   currentUser: User | null;
@@ -49,12 +50,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       return;
     }
 
+    let generation = 0;
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
+      const requestGeneration = ++generation;
+      const isCurrent = () => requestGeneration === generation && (auth.currentUser?.uid || null) === (firebaseUser?.uid || null);
+      setCurrentUser(null);
+      setLoading(true);
       console.log('[AuthContext] onAuthStateChanged fired, user:', firebaseUser?.email || 'null');
       try {
         if (firebaseUser) {
           // Load user profile from Firestore
           const profile = await firebaseService.getUserProfile(firebaseUser.uid);
+          if (!isCurrent()) return;
           if (profile) {
             setCurrentUser({
               uid: firebaseUser.uid,
@@ -75,15 +82,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           setCurrentUser(null);
         }
       } catch (err) {
+        if (!isCurrent()) return;
         console.error('Error loading user profile:', err);
         setError('Failed to load user profile');
       } finally {
         console.log('[AuthContext] Setting loading to false');
-        setLoading(false);
+        if (isCurrent()) setLoading(false);
       }
     });
 
-    return unsubscribe;
+    return () => { generation++; unsubscribe(); };
   }, []);
 
   const signUp = async (
@@ -112,8 +120,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       await firebaseService.createUserProfile(user.uid, profile);
 
+      if (auth.currentUser?.uid !== user.uid) return;
+
       // Migrate localStorage data
       await firebaseService.migrateLocalDataToFirebase(user.uid);
+
+      if (auth.currentUser?.uid !== user.uid) return;
 
       // Update local state
       setCurrentUser({
@@ -141,6 +153,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       // Load user profile
       const profile = await firebaseService.getUserProfile(user.uid);
+      if (auth.currentUser?.uid !== user.uid) return;
       if (profile) {
         setCurrentUser({
           uid: user.uid,
@@ -164,6 +177,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const logout = async () => {
     try {
       setError(null);
+      // Remove this browser's server token while the owner is still authenticated.
+      // If removal fails, keep the session so sign-out can be retried safely.
+      if (auth.currentUser) await cleanupPushOnLogout(auth.currentUser.uid);
       await signOut(auth);
       setCurrentUser(null);
     } catch (err: any) {

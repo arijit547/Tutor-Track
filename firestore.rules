@@ -4,11 +4,49 @@ service cloud.firestore {
     // Tutors collection - user-scoped access
     match /tutors/{tutorId} {
       // Only authenticated users can access their own tutor document
-      allow read, write: if request.auth.uid == tutorId;
+      allow read, write: if request.auth != null && request.auth.uid == tutorId;
+
+      // Device tokens belong exclusively to their authenticated tutor.
+      match /pushTokens/{deviceId} {
+        allow read, delete: if request.auth != null && request.auth.uid == tutorId;
+        allow create, update: if request.auth != null && request.auth.uid == tutorId
+          && request.resource.data.keys().hasOnly(['token', 'updatedAt'])
+          && request.resource.data.keys().hasAll(['token', 'updatedAt'])
+          && request.resource.data.token is string
+          && request.resource.data.token.size() > 0
+          && request.resource.data.token.size() <= 4096
+          && request.resource.data.updatedAt == request.time;
+      }
+
+      match /notificationSettings/general {
+        allow read, delete: if request.auth != null && request.auth.uid == tutorId;
+        allow create, update: if request.auth != null && request.auth.uid == tutorId
+          && request.resource.data.keys().hasOnly([
+            'classReminders', 'paymentReminders', 'monthlySalaryReminders', 'updatedAt'
+          ])
+          && request.resource.data.keys().hasAll([
+            'classReminders', 'paymentReminders', 'monthlySalaryReminders', 'updatedAt'
+          ])
+          && request.resource.data.classReminders is bool
+          && request.resource.data.paymentReminders is bool
+          && request.resource.data.monthlySalaryReminders is bool
+          && request.resource.data.updatedAt == request.time;
+      }
+
+      // Dispatch leases, delivery results and callable rate limits are server-only.
+      match /reminders/{reminderId} {
+        allow read, write: if false;
+      }
+      match /pushTests/{testId} {
+        allow read, write: if false;
+      }
+      match /notificationMeta/{metaId} {
+        allow read, write: if false;
+      }
 
       // Profile subcollection
       match /profile/{document=**} {
-        allow read, write: if request.auth.uid == tutorId;
+        allow read, write: if request.auth != null && request.auth.uid == tutorId;
       }
 
       // Private finance entries and preferences; not available to other users.
@@ -21,7 +59,7 @@ service cloud.firestore {
 
       // Students subcollection and all nested documents (sessions, payments)
       match /students/{document=**} {
-        allow read, write: if request.auth.uid == tutorId;
+        allow read, write: if request.auth != null && request.auth.uid == tutorId;
       }
     }
   }

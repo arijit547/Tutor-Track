@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Student, Session, Payment, ViewState, DayOfWeek } from './types';
+import React, { useState, useEffect } from 'react';
+import { Student, Session, Payment, ViewState } from './types';
 import { MOCK_STUDENTS } from './constants';
 import { Dashboard } from './components/Dashboard';
 import { StudentDetail } from './components/StudentDetail';
@@ -16,15 +16,14 @@ import { firebaseService } from './services/firebaseService';
 import { syncService } from './services/syncService';
 import { isFirebaseConfigured } from './services/firebase';
 import { useAuth } from './context/AuthContext';
-import { startLocationTracking, stopLocationTracking } from './services/locationService.browser'; // Browser-only, no plugins
+import { useLocationTracking } from './hooks/useLocationTracking';
+import { usePushNotifications } from './hooks/usePushNotifications';
+import { registerPushServiceWorker } from './services/pushService';
 import { LocationDebugPanel } from './components/LocationDebugPanel';
-import { Capacitor } from '@capacitor/core';
-import { LocalNotifications } from '@capacitor/local-notifications';
 import { BrandLogo } from './components/BrandLogo';
 import { DashboardSkeleton } from './components/DashboardSkeleton';
 import { PersonalFinance } from './components/PersonalFinance';
-
-const STORAGE_KEY = 'tutortrack_data_v1';
+import { getStudentBilling } from './services/studentBilling';
 
 const App: React.FC = () => {
   // --- Auth State ---
@@ -32,9 +31,10 @@ const App: React.FC = () => {
 
   // --- State ---
   const [students, setStudents] = useState<Student[]>([]);
+  const [loadedUid, setLoadedUid] = useState<string | null>(null);
+  const storageKey = currentUser ? `tutortrack_data_v1_${currentUser.uid}` : null;
   const [currentView, setCurrentView] = useState<ViewState>('dashboard');
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
-  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
 
   // Firebase & Sync States
   const [loading, setLoading] = useState(true);
@@ -42,7 +42,6 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [pendingCount, setPendingCount] = useState(0);
-  const [locationTrackingEnabled, setLocationTrackingEnabled] = useState(false);
 
   // Modal States
   const [isSessionModalOpen, setIsSessionModalOpen] = useState(false);
@@ -53,81 +52,77 @@ const App: React.FC = () => {
   // If a modal is open, which student is it for?
   const [modalStudentId, setModalStudentId] = useState<string | null>(null);
 
-  // Track notified sessions for the current session to avoid spamming
-  const notifiedSessions = useRef<Set<string>>(new Set());
   const [autoSessionPending, setAutoSessionPending] = useState<{ studentId: string; duration: number } | null>(null);
+
+  const push = usePushNotifications(currentUser?.uid);
+  const location = useLocationTracking(currentUser?.uid, loadedUid === currentUser?.uid ? students : [], (studentId, duration) => {
+    setAutoSessionPending({ studentId, duration });
+  });
+  const notificationsEnabled = push.enabled;
+  const locationTrackingEnabled = location.enabled;
+
+  useEffect(() => {
+    void registerPushServiceWorker().catch(() => {
+      // Registration errors are surfaced when the user enables push.
+    });
+  }, []);
+
+  useEffect(() => { setAutoSessionPending(null); }, [currentUser?.uid]);
+
+  // Notification links wait for authentication and the student's synced data.
+  useEffect(() => {
+    if (!currentUser || loading || loadedUid !== currentUser.uid) return;
+    const studentId = new URL(window.location.href).searchParams.get('student');
+    if (studentId && students.some(student => student.id === studentId)) {
+      setSelectedStudentId(studentId);
+      setCurrentView('student-detail');
+      const url = new URL(window.location.href);
+      url.searchParams.delete('student');
+      window.history.replaceState(null, '', url);
+    }
+  }, [currentUser?.uid, loadedUid, loading, students]);
 
   // --- Effects ---
 
-  // Load data on mount
+  // Isolate cached student locations and reject loads from a previous account.
   useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setLoadedUid(null);
+    setStudents([]);
+    setSelectedStudentId(null);
+    setCurrentView('dashboard');
+    setIsSessionModalOpen(false);
+    setIsPaymentModalOpen(false);
+    setIsStudentFormModalOpen(false);
     const loadData = async () => {
-      setLoading(true);
+      if (!currentUser || !storageKey) { setLoading(false); return; }
+      const cached = () => {
+        try {
+          const value = JSON.parse(localStorage.getItem(storageKey) || 'null');
+          return Array.isArray(value) ? value as Student[] : [];
+        } catch { return []; }
+      };
       try {
-        if (!currentUser) {
-          setStudents([]);
-          return;
-        }
-
-        if (isFirebaseConfigured()) {
-          const firebaseStudents = await firebaseService.getAllStudents();
-          if (firebaseStudents.length > 0) {
-            setStudents(firebaseStudents);
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(firebaseStudents));
-          } else {
-            // No data in Firebase, try localStorage
-            const saved = localStorage.getItem(STORAGE_KEY);
-            if (saved) {
-              setStudents(JSON.parse(saved));
-            } else {
-              setStudents(MOCK_STUDENTS);
-            }
-          }
-        } else {
-          // Firebase not configured, use localStorage
-          const saved = localStorage.getItem(STORAGE_KEY);
-          if (saved) {
-            setStudents(JSON.parse(saved));
-          } else {
-            setStudents(MOCK_STUDENTS);
-          }
-        }
-      } catch (e) {
-        console.error('Error loading data:', e);
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) {
-          setStudents(JSON.parse(saved));
-        } else {
-          setStudents(MOCK_STUDENTS);
-        }
+        const cloud = isFirebaseConfigured() ? await firebaseService.getAllStudents() : null;
+        if (cancelled) return;
+        const saved = cached();
+        setStudents(cloud?.length ? cloud : saved.length ? saved : cloud ? [] : MOCK_STUDENTS);
+      } catch {
+        if (!cancelled) setStudents(cached());
       } finally {
-        setLoading(false);
+        if (!cancelled) { setLoadedUid(currentUser.uid); setLoading(false); }
       }
     };
+    void loadData();
+    return () => { cancelled = true; };
+  }, [currentUser?.uid, storageKey]);
 
-    loadData();
-
-    const checkPromises = async () => {
-      if (Capacitor.isNativePlatform()) {
-        const { display } = await LocalNotifications.checkPermissions();
-        if (display === 'granted') {
-          setNotificationsEnabled(true);
-        }
-      } else {
-        if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-          setNotificationsEnabled(true);
-        }
-      }
-    };
-    checkPromises();
-  }, [currentUser]);
-
-  // Save data on change (localStorage + Firebase sync)
   useEffect(() => {
-    if (students.length > 0) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(students));
-    }
-  }, [students]);
+    if (!storageKey || loading || loadedUid !== currentUser?.uid) return;
+    try { localStorage.setItem(storageKey, JSON.stringify(students)); }
+    catch { setError('Browser storage is full or unavailable. Keep your connection on so changes can sync.'); }
+  }, [students, storageKey, loadedUid, currentUser?.uid, loading]);
 
   // Online/Offline status
   useEffect(() => {
@@ -163,78 +158,6 @@ const App: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Notification Check Loop
-  useEffect(() => {
-    if (!notificationsEnabled) return;
-
-    const checkSchedule = () => {
-      const now = new Date();
-      const dayNames: DayOfWeek[] = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-      const currentDay = dayNames[now.getDay()];
-
-      students.forEach(student => {
-        if (student.active && student.scheduleDays.includes(currentDay) && student.scheduleTime) {
-          // Parse Schedule Time
-          const [hours, minutes] = student.scheduleTime.split(':').map(Number);
-          const classTime = new Date();
-          classTime.setHours(hours, minutes, 0, 0);
-
-          const diffMs = classTime.getTime() - now.getTime();
-          const diffMins = diffMs / 60000;
-
-          // Unique key for today's session: ID + DateString
-          const sessionKey = `${student.id}-${now.toDateString()}`;
-
-          // Notify if within 30 mins AND not yet notified today
-          if (diffMins > 0 && diffMins <= 30 && !notifiedSessions.current.has(sessionKey)) {
-            const title = `Upcoming Tuition: ${student.name}`;
-            const body = `Session starts in ${Math.round(diffMins)} minutes (${student.scheduleTime}). Subject: ${student.subject}`;
-
-            if (Capacitor.isNativePlatform()) {
-              LocalNotifications.schedule({
-                notifications: [
-                  {
-                    title,
-                    body,
-                    id: new Date().getTime(),
-                    schedule: { at: new Date() }, // Fire immediately
-                  }
-                ]
-              });
-            } else if ('Notification' in window) {
-              new Notification(title, {
-                body,
-                icon: '/favicon.ico' // Fallback icon
-              });
-            }
-
-            notifiedSessions.current.add(sessionKey);
-          }
-        }
-      });
-    };
-
-    // Check every minute
-    const interval = setInterval(checkSchedule, 60000);
-    // Initial check
-    checkSchedule();
-
-    return () => clearInterval(interval);
-  }, [students, notificationsEnabled]);
-
-  // Location Tracking for Auto Sessions
-  useEffect(() => {
-    if (!locationTrackingEnabled || !currentUser) return;
-
-    startLocationTracking(students, (studentId, duration) => {
-      setAutoSessionPending({ studentId, duration });
-    });
-
-    return () => {
-      stopLocationTracking();
-    };
-  }, [locationTrackingEnabled, students, currentUser]);
-
   // --- Handlers ---
 
   const handleNavigateToStudent = (id: string) => {
@@ -247,46 +170,14 @@ const App: React.FC = () => {
     setCurrentView('dashboard');
   };
 
-  const requestNotificationPermission = async () => {
-    if (Capacitor.isNativePlatform()) {
-      let permStatus = await LocalNotifications.checkPermissions();
-      
-      if (permStatus.display === 'prompt') {
-        permStatus = await LocalNotifications.requestPermissions();
-      }
-
-      if (permStatus.display !== 'granted') {
-        alert("Push notification permission denied.");
-        return;
-      }
-      
-      setNotificationsEnabled(true);
-      await LocalNotifications.schedule({
-        notifications: [
-          {
-            title: "Notifications Enabled",
-            body: "You will be reminded 30 minutes before classes.",
-            id: new Date().getTime(),
-            schedule: { at: new Date() }, // Fire immediately
-          }
-        ]
-      });
-    } else {
-      if (!("Notification" in window)) {
-        alert("This browser does not support desktop notifications");
-        return;
-      }
-
-      const permission = await Notification.requestPermission();
-      if (permission === "granted") {
-        setNotificationsEnabled(true);
-        new Notification("Notifications Enabled", { body: "You will be reminded 30 minutes before classes." });
-      }
-    }
+  const requestNotificationPermission = () => {
+    if (push.enabled) setCurrentView('settings');
+    else void push.enable();
   };
 
-  const toggleLocationTracking = () => {
-    setLocationTrackingEnabled(!locationTrackingEnabled);
+  const handleLogout = async () => {
+    try { await logout(); }
+    catch (err) { setError(err instanceof Error ? err.message : 'Sign out failed. Please try again.'); }
   };
 
   const confirmAutoSession = () => {
@@ -496,10 +387,7 @@ const App: React.FC = () => {
   // Calculate outstanding for payment modal default
   const getOutstandingBalance = (student?: Student) => {
     if (!student) return 0;
-    const totalSessions = student.sessions.filter(s => s.status === 'completed' || s.status === 'missed').length;
-    const totalDue = totalSessions * student.ratePerSession;
-    const totalPaid = student.payments.reduce((sum, p) => sum + p.amount, 0);
-    return Math.max(0, totalDue - totalPaid);
+    return getStudentBilling(student).outstanding;
   };
 
   return (
@@ -546,13 +434,20 @@ const App: React.FC = () => {
                   {isFirebaseConfigured() && isOnline && syncing && <span className="h-8 w-8 rounded-full grid place-items-center bg-[#eeecf7] text-[#55518f]" title="Syncing"><CloudSync className="w-3.5 h-3.5 animate-spin" /></span>}
                 </div>
 
-                <button onClick={requestNotificationPermission} className={`h-9 w-9 sm:h-10 sm:w-10 rounded-xl grid place-items-center transition-colors ${notificationsEnabled ? 'bg-[#eeecf7] text-[#4f4b84]' : 'text-[#878492] hover:bg-[#ece9e2]'}`} title={notificationsEnabled ? 'Notifications active' : 'Enable notifications'}>
+                <button onClick={requestNotificationPermission} disabled={push.busy} aria-label={notificationsEnabled ? "Notification settings" : "Enable notifications"} aria-pressed={notificationsEnabled} className={`h-9 w-9 sm:h-10 sm:w-10 rounded-xl grid place-items-center transition-colors ${notificationsEnabled ? 'bg-[#eeecf7] text-[#4f4b84]' : 'text-[#878492] hover:bg-[#ece9e2]'}`} title={notificationsEnabled ? 'Notifications active' : 'Enable notifications'}>
                   {notificationsEnabled ? <Bell className="w-[18px] h-[18px]" /> : <BellOff className="w-[18px] h-[18px]" />}
                 </button>
 
-                <button onClick={toggleLocationTracking} className={`h-9 w-9 sm:h-10 sm:w-10 rounded-xl grid place-items-center transition-colors relative ${locationTrackingEnabled ? 'bg-[#edf7f1] text-[#3f805f]' : 'text-[#878492] hover:bg-[#ece9e2]'}`} title={locationTrackingEnabled ? 'Location tracking active' : 'Enable auto-session location tracking'}>
+                <button onClick={location.toggle} disabled={location.busy} aria-label={locationTrackingEnabled ? "Disable location tracking" : "Enable location tracking"} aria-pressed={locationTrackingEnabled} className={`h-9 w-9 sm:h-10 sm:w-10 rounded-xl grid place-items-center transition-colors relative ${locationTrackingEnabled ? 'bg-[#edf7f1] text-[#3f805f]' : 'text-[#878492] hover:bg-[#ece9e2]'}`} title={locationTrackingEnabled ? 'Location tracking active' : 'Enable auto-session location tracking'}>
                   <MapPin className="w-[18px] h-[18px]" />
-                  {locationTrackingEnabled && <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-[#55a377] ring-2 ring-[#edf7f1]" />}
+                  {(push.message || push.error || location.error || error) && (
+              <div role={push.error || location.error || error ? 'alert' : 'status'} className="mb-4 rounded-[16px] border border-[#ddd8eb] bg-white px-4 py-3 flex items-start justify-between gap-3">
+                <p className="text-xs leading-5 text-[#55516b]">{push.error || location.error || error || push.message}</p>
+                {location.error ? <button className="text-xs font-bold text-[#55518f] shrink-0" onClick={() => setCurrentView('settings')}>Location settings</button> : <button className="text-xs font-bold text-[#55518f] shrink-0" onClick={() => { push.dismissMessage(); setError(null); }}>Dismiss</button>}
+              </div>
+            )}
+
+            {locationTrackingEnabled && <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-[#55a377] ring-2 ring-[#edf7f1]" />}
                 </button>
 
                 <span className="hidden sm:block h-7 w-px bg-[#ddd9d1] mx-0.5" />
@@ -568,7 +463,7 @@ const App: React.FC = () => {
                 <button onClick={() => setCurrentView('settings')} className="h-9 w-9 sm:h-10 sm:w-10 rounded-[13px] bg-[#34326f] text-white grid place-items-center text-xs font-extrabold shadow-sm" title="Open profile">
                   {(currentUser.displayName || currentUser.email || 'T').charAt(0).toUpperCase()}
                 </button>
-                <button onClick={logout} className="h-9 w-9 sm:h-10 sm:w-10 rounded-xl grid place-items-center text-[#918d99] hover:bg-[#fff0ed] hover:text-[#aa554b] transition-colors" title="Sign out">
+                <button onClick={handleLogout} className="h-9 w-9 sm:h-10 sm:w-10 rounded-xl grid place-items-center text-[#918d99] hover:bg-[#fff0ed] hover:text-[#aa554b] transition-colors" title="Sign out">
                   <LogOut className="w-[18px] h-[18px]" />
                 </button>
               </div>
@@ -586,6 +481,13 @@ const App: React.FC = () => {
               <div className="mb-4 rounded-[16px] bg-[#fff4e8] border border-[#f0dfc8] px-4 py-3 flex items-center gap-3 text-[#805b30]">
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 <p className="text-xs font-semibold">You’re offline. Keep working—changes will be queued and synced when your connection returns.</p>
+              </div>
+            )}
+
+            {(push.message || push.error || location.error || error) && (
+              <div role={push.error || location.error || error ? 'alert' : 'status'} className="mb-4 rounded-[16px] border border-[#ddd8eb] bg-white px-4 py-3 flex items-start justify-between gap-3">
+                <p className="text-xs leading-5 text-[#55516b]">{push.error || location.error || error || push.message}</p>
+                {location.error ? <button className="text-xs font-bold text-[#55518f] shrink-0" onClick={() => setCurrentView('settings')}>Location settings</button> : <button className="text-xs font-bold text-[#55518f] shrink-0" onClick={() => { push.dismissMessage(); setError(null); }}>Dismiss</button>}
               </div>
             )}
 
@@ -608,7 +510,7 @@ const App: React.FC = () => {
 
             {currentView === 'finance' && <PersonalFinance key={currentUser.uid} uid={currentUser.uid} students={students} />}
 
-            {currentView === 'settings' && currentUser && <TutorProfile user={currentUser} onBack={handleBackToDashboard} />}
+            {currentView === 'settings' && currentUser && <TutorProfile user={currentUser} onBack={handleBackToDashboard} tracking={{ push, location }} />}
           </main>
 
           <StudentFormModal isOpen={isStudentFormModalOpen} onClose={() => setIsStudentFormModalOpen(false)} onSubmit={handleStudentSubmit} student={editingStudentId ? students.find(s => s.id === editingStudentId) : undefined} />
