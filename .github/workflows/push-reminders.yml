@@ -1,0 +1,71 @@
+name: Send TutorTrack reminders
+
+on:
+  schedule:
+    # UTC: offset the five-minute sweep from the busy start of each hour.
+    - cron: '2-57/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tutortrack-push-reminders
+  cancel-in-progress: false
+
+jobs:
+  send-reminders:
+    # Standard hosted runners are free for public repositories. Avoid consuming
+    # the private-repository minutes allowance if visibility changes later.
+    # Keep the schedule dormant until the first manual invocation succeeds.
+    if: ${{ !github.event.repository.private && (github.event_name == 'workflow_dispatch' || vars.PUSH_REMINDERS_ENABLED == 'true') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Invoke the authenticated reminder endpoint
+        env:
+          REMINDER_ENDPOINT: ${{ vars.REMINDER_ENDPOINT || 'https://tutor-track-ten.vercel.app/api/push/reminders' }}
+          REMINDER_ALLOWED_HOST: ${{ vars.REMINDER_ALLOWED_HOST || 'tutor-track-ten.vercel.app' }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          const fail = message => {
+            console.error(message);
+            process.exit(1);
+          };
+          const secret = process.env.CRON_SECRET;
+          if (!secret || /[\r\n]/.test(secret)) {
+            fail('Configure the CRON_SECRET repository secret to match Vercel.');
+          }
+          let endpoint;
+          try {
+            endpoint = new URL(process.env.REMINDER_ENDPOINT);
+          } catch {
+            fail('REMINDER_ENDPOINT must be a valid HTTPS URL.');
+          }
+          const allowedHost = process.env.REMINDER_ALLOWED_HOST;
+          if (!/^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/.test(allowedHost)
+            || !allowedHost.includes('.')
+            || endpoint.protocol !== 'https:'
+            || endpoint.hostname !== allowedHost
+            || endpoint.username || endpoint.password
+            || (endpoint.port && endpoint.port !== '443')
+            || endpoint.pathname !== '/api/push/reminders'
+            || endpoint.search || endpoint.hash) {
+            fail('Reminder URL must use HTTPS, the approved hostname, and /api/push/reminders with no credentials, query or fragment.');
+          }
+          try {
+            const response = await fetch(endpoint, {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${secret}` },
+              redirect: 'error',
+              signal: AbortSignal.timeout(90_000),
+            });
+            await response.body?.cancel();
+            if (!response.ok) fail(`Reminder endpoint returned HTTP ${response.status}.`);
+            console.log(`Reminder sweep accepted (HTTP ${response.status}).`);
+          } catch {
+            fail('Reminder request failed or timed out. Check deployment availability and server logs.');
+          }
+          NODE

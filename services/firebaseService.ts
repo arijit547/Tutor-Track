@@ -394,7 +394,10 @@ export const firebaseService = {
   // DATA MIGRATION
   async migrateLocalDataToFirebase(userId: string): Promise<void> {
     try {
-      const localStudents = localStorage.getItem('tutortrack_data_v1');
+      // Legacy unscoped caches have no provable owner and must not be imported
+      // into whichever account happens to sign up on a shared browser.
+      const cacheKey = `tutortrack_data_v1_${userId}`;
+      const localStudents = localStorage.getItem(cacheKey);
       if (!localStudents) return;
 
       const students: Student[] = JSON.parse(localStudents);
@@ -487,7 +490,7 @@ export const firebaseService = {
       }
 
       // Clear localStorage after successful migration
-      localStorage.removeItem('tutortrack_data_v1');
+      localStorage.removeItem(cacheKey);
     } catch (error) {
       console.error('Error migrating local data:', error);
       throw error;

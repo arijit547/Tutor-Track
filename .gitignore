@@ -2,12 +2,19 @@
 node_modules
 dist
 dist-ssr
+.firebase
+.vercel
+output
+.playwright-cli
 
 # Environment files (never commit real Firebase configuration files)
 .env
 .env.*
 !.env.example
 *.local
+*firebase-adminsdk*.json
+service-account*.json
+.secrets/
 
 # Logs
 logs

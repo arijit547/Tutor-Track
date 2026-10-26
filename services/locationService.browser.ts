@@ -1,8 +1,9 @@
-import { Student } from '../types';
+import type { Student } from '../types';
 
 type Location = { latitude: number; longitude: number; address?: string };
 
 let watchId: number | null = null;
+let watchGeneration = 0;
 const enteredAt = new Map<string, number>();
 const fired = new Set<string>();
 
@@ -25,13 +26,22 @@ export const getCurrentLocation = (): Promise<Location> => new Promise((resolve,
   );
 });
 
-export const startLocationTracking = (students: Student[], onSessionDetected: (studentId: string, duration: number) => void) => {
+export const startLocationTracking = (
+  students: Student[] | (() => Student[]),
+  onSessionDetected: (studentId: string, duration: number) => void,
+  onError?: (error: GeolocationPositionError) => void,
+) => {
   if (!('geolocation' in navigator) || watchId !== null) return;
-  const withLocations = students.filter(s => s.active && s.location);
-  if (!withLocations.length) return;
+  const generation = ++watchGeneration;
 
   watchId = navigator.geolocation.watchPosition(({ coords }) => {
+    if (generation !== watchGeneration) return;
     const now = Date.now();
+    // Read current students without restarting the watch or losing dwell time.
+    const withLocations = (typeof students === 'function' ? students() : students).filter(s => s.active && s.location);
+    for (const id of enteredAt.keys()) {
+      if (!withLocations.some(student => student.id === id)) enteredAt.delete(id);
+    }
     withLocations.forEach(student => {
       if (!student.location) return;
       const meters = distanceMeters(coords.latitude, coords.longitude, student.location.latitude, student.location.longitude);
@@ -39,7 +49,7 @@ export const startLocationTracking = (students: Student[], onSessionDetected: (s
 
       if (meters <= 150) {
         if (!enteredAt.has(student.id)) enteredAt.set(student.id, now);
-        const mins = Math.floor((now - (enteredAt.get(student.id) || now)) / 60000);
+        const mins = Math.floor((now - (enteredAt.get(student.id) ?? now)) / 60000);
         if (mins >= 20 && !fired.has(key)) {
           fired.add(key);
           onSessionDetected(student.id, mins);
@@ -48,11 +58,18 @@ export const startLocationTracking = (students: Student[], onSessionDetected: (s
         enteredAt.delete(student.id);
       }
     });
-  }, () => undefined, { enableHighAccuracy: false, maximumAge: 60000, timeout: 15000 });
+  }, error => {
+    if (generation !== watchGeneration) return;
+    // A gap in GPS fixes cannot establish continuous time at a tuition location.
+    enteredAt.clear();
+    onError?.(error);
+  }, { enableHighAccuracy: false, maximumAge: 60000, timeout: 15000 });
 };
 
-export const stopLocationTracking = () => {
+export const stopLocationTracking = (resetSessionHistory = false) => {
+  watchGeneration++;
   if (watchId !== null && 'geolocation' in navigator) navigator.geolocation.clearWatch(watchId);
   watchId = null;
   enteredAt.clear();
+  if (resetSessionHistory) fired.clear();
 };

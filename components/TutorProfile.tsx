@@ -4,13 +4,15 @@ import { User } from '../types';
 import { firebaseService } from '../services/firebaseService';
 import { Button } from './Button';
 import { User as UserIcon, Lock, Save, ArrowLeft, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
+import { TrackingPreferences } from './TrackingPreferences';
 
 interface TutorProfileProps {
   user: User;
   onBack: () => void;
+  tracking: React.ComponentProps<typeof TrackingPreferences>;
 }
 
-export const TutorProfile: React.FC<TutorProfileProps> = ({ user, onBack }) => {
+export const TutorProfile: React.FC<TutorProfileProps> = ({ user, onBack, tracking }) => {
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -108,6 +110,7 @@ export const TutorProfile: React.FC<TutorProfileProps> = ({ user, onBack }) => {
         </aside>
 
         <div className="space-y-5">
+          <TrackingPreferences {...tracking} />
           <section className="tt-card rounded-[24px] p-5 sm:p-6">
             <div className="flex items-center gap-3 pb-5 border-b border-[#eeece6]">
               <div className="h-10 w-10 rounded-[13px] bg-[#eeecf7] text-[#55518f] grid place-items-center"><UserIcon className="w-[18px] h-[18px]" /></div>
