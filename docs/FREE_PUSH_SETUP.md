@@ -40,7 +40,7 @@ npm test
 npm run build
 ```
 
-The build emits the API's TypeScript graph as Node ESM and imports it with native Node before building the frontend. This catches runtime import-resolution errors that TSX-based tests can hide. The check calls only unauthenticated/method guards and needs no Admin credential.
+The build emits the API's TypeScript graph as Node ESM and imports it with native Node before building the frontend. The smoke process disables CommonJS `require(ESM)` support to match serverless loaders. This catches resolution and dependency-format errors that TSX/newer local Node defaults can hide. The check calls only unauthenticated/method guards and needs no Admin credential. Firebase Admin is pinned to 13.10.0 for its compatible dependency graph. The `uuid` override supplies patched 11.1.1 to older Google HTTP clients, which use its compatible `v4` API. Check both the native build guard and dependency audit before changing these versions.
 
 For rules, install Java and run `npm --prefix rules-tests ci`, then `npm run rules:test`. Tests use a loopback emulator and `demo-tutortrack`, not the live database. See [rules tests](../rules-tests/README.md).
 
