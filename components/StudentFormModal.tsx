@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from './Modal';
 import { Button } from './Button';
-import { Student, DayOfWeek, BillingMode, MonthlyBillingPlan } from '../types';
+import { Student, DayOfWeek, BillingMode } from '../types';
 import { getStudentPlans, monthFromDate, nextMonth } from '../services/studentBilling';
+import { prepareStudentBillingUpdate } from '../services/studentBillingUpdate';
 import { MapPin, Map, Mail, UserRound, BookOpen, Banknote, Clock3 } from 'lucide-react';
 import { getCurrentLocation } from '../services/locationService.browser';
 import { MapPicker } from './MapPicker';
@@ -72,17 +73,10 @@ export const StudentFormModal: React.FC<StudentFormModalProps> = ({ isOpen, onCl
     if (!validateForm()) return;
     const monthly = Number(monthlySalary);
     const count = sessionsPerMonth ? Number(sessionsPerMonth) : undefined;
-    const equivalentRate = count ? Math.round(monthly / count * 100) / 100 : 0;
-    const savedPlans = student ? getStudentPlans(student) : [];
-    const latest = savedPlans[savedPlans.length - 1];
-    const planChanged = !latest || latest.monthlySalary !== monthly || latest.billingMode !== billingMode || latest.sessionsPerMonth !== count;
-    const hasRecordedHistory = !!student && (student.sessions.length > 0 || student.payments.length > 0);
     const monthNow = monthFromDate(new Date());
-    const effectiveMonth = !student ? monthFromDate(billingStartDate)
-      : hasRecordedHistory ? nextMonth(monthNow) : monthNow;
-    const newPlan: MonthlyBillingPlan = { effectiveMonth, monthlySalary: monthly, billingMode, ...(count ? { sessionsPerMonth: count } : {}) };
-    const billingPlans = planChanged ? [...savedPlans.filter(p => p.effectiveMonth !== effectiveMonth), newPlan]
-      .sort((a, b) => a.effectiveMonth.localeCompare(b.effectiveMonth)) : savedPlans;
+    const billingUpdate = prepareStudentBillingUpdate(student, {
+      monthlySalary: monthly, billingMode, sessionsPerMonth: count, billingStartDate,
+    });
 
     let pausedMonths = [...(student?.billingPausedMonths || [])];
     let pausedFromMonth = student?.billingPausedFromMonth || (!student && !active ? monthFromDate(billingStartDate) : '');
@@ -98,11 +92,7 @@ export const StudentFormModal: React.FC<StudentFormModalProps> = ({ isOpen, onCl
     onSubmit({
       name: name.trim(), subject: subject.trim(), scheduleTime, scheduleDays,
       email: email.trim() || undefined, active, location,
-      monthlySalary: monthly, billingMode, sessionsPerMonth: count,
-      ratePerSession: equivalentRate,
-      ...(student && { legacyRatePerSession: student.legacyRatePerSession ?? student.ratePerSession }),
-      billingStartDate: student?.billingStartDate || billingStartDate,
-      billingPlans, billingPausedMonths: pausedMonths, billingPausedFromMonth: pausedFromMonth,
+      ...billingUpdate, billingPausedMonths: pausedMonths, billingPausedFromMonth: pausedFromMonth,
     });
     onClose();
   };
