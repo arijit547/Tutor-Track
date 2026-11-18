@@ -11,7 +11,7 @@ import { MapPicker } from './MapPicker';
 interface StudentFormModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (studentData: Omit<Student, 'id' | 'sessions' | 'payments' | 'joinedDate'>) => void;
+  onSubmit: (studentData: Omit<Student, 'id' | 'sessions' | 'payments' | 'joinedDate'>) => boolean;
   student?: Student;
 }
 
@@ -89,11 +89,12 @@ export const StudentFormModal: React.FC<StudentFormModalProps> = ({ isOpen, onCl
       pausedFromMonth = '';
     }
 
-    onSubmit({
+    const saved = onSubmit({
       name: name.trim(), subject: subject.trim(), scheduleTime, scheduleDays,
       email: email.trim() || undefined, active, location,
       ...billingUpdate, billingPausedMonths: pausedMonths, billingPausedFromMonth: pausedFromMonth,
     });
+    if (saved === false) { setErrors({ save: 'Unable to save. Check browser storage and try again.' }); return; }
     onClose();
   };
 
@@ -108,6 +109,7 @@ export const StudentFormModal: React.FC<StudentFormModalProps> = ({ isOpen, onCl
     <>
       <Modal isOpen={isOpen} onClose={onClose} title={student ? `Edit student · ${student.name}` : 'Add a new student'}>
         <form onSubmit={handleSubmit} className="space-y-4">
+          {errors.save && <p role="alert" className="text-xs text-red-700">{errors.save}</p>}
           <div className="grid sm:grid-cols-2 gap-3">
             <Field label="Student name" error={errors.name} icon={<UserRound className="w-4 h-4" />}>
               <input value={name} onChange={e => setName(e.target.value)} placeholder="Student name" className={`${field} ${fieldBorder('name')} pl-10`} />

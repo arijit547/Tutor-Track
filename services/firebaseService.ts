@@ -21,7 +21,7 @@ const SESSIONS_SUBCOLLECTION = 'sessions';
 const PAYMENTS_SUBCOLLECTION = 'payments';
 
 // Get current user ID
-const getUserId = async (): Promise<string | null> => {
+const getUserId = async (expectedUid?: string): Promise<string | null> => {
   if (!isFirebaseConfigured() || !auth) return null;
 
   try {
@@ -31,7 +31,8 @@ const getUserId = async (): Promise<string | null> => {
         resolve(true);
       });
     });
-    return auth.currentUser?.uid || null;
+    const uid = auth.currentUser?.uid || null;
+    return expectedUid && uid !== expectedUid ? null : uid;
   } catch {
     return null;
   }
@@ -40,15 +41,16 @@ const getUserId = async (): Promise<string | null> => {
 // STUDENTS OPERATIONS
 export const firebaseService = {
   // Get all students for current user
-  async getAllStudents(): Promise<Student[]> {
+  async getAllStudents(expectedUid?: string): Promise<Student[]> {
     if (!isFirebaseConfigured()) return [];
 
     try {
-      const userId = await getUserId();
-      if (!userId) return [];
+      const userId = await getUserId(expectedUid);
+      if (!userId) throw new Error('Sign in again before loading student data.');
 
       const studentsRef = collection(db, TUTORS_COLLECTION, userId, STUDENTS_SUBCOLLECTION);
       const querySnapshot = await getDocs(studentsRef);
+      if (querySnapshot.metadata.fromCache) throw new Error('Cloud student data is unavailable.');
 
       const students: Student[] = [];
       for (const docSnap of querySnapshot.docs) {
@@ -82,27 +84,28 @@ export const firebaseService = {
         });
       }
 
+      if (auth.currentUser?.uid !== userId) throw new Error('Account changed while loading students.');
       return students;
     } catch (error) {
       console.error('Error fetching students:', error);
-      return [];
+      throw error;
     }
   },
 
   // Create a new student
-  async createStudent(studentData: Omit<Student, 'id' | 'sessions' | 'payments'>): Promise<Student | null> {
+  async createStudent(student: Omit<Student, 'sessions' | 'payments'>, expectedUid?: string): Promise<Student | null> {
     if (!isFirebaseConfigured()) return null;
 
     try {
-      const userId = await getUserId();
+      const userId = await getUserId(expectedUid);
       if (!userId) return null;
 
-      const studentId = crypto.randomUUID();
+      const { id: studentId, ...studentData } = student;
+      if (!studentId) return null;
       const studentRef = doc(db, TUTORS_COLLECTION, userId, STUDENTS_SUBCOLLECTION, studentId);
 
       const firestoreData = {
         ...studentData,
-        joinedDate: new Date().toISOString(),
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now(),
       };
@@ -112,7 +115,6 @@ export const firebaseService = {
       return {
         ...studentData,
         id: studentId,
-        joinedDate: new Date().toISOString(),
         sessions: [],
         payments: [],
       };
@@ -123,11 +125,11 @@ export const firebaseService = {
   },
 
   // Update a student
-  async updateStudent(studentId: string, updates: Partial<Omit<Student, 'id' | 'sessions' | 'payments'>>): Promise<boolean> {
+  async updateStudent(studentId: string, updates: Partial<Omit<Student, 'id' | 'sessions' | 'payments'>>, expectedUid?: string): Promise<boolean> {
     if (!isFirebaseConfigured()) return false;
 
     try {
-      const userId = await getUserId();
+      const userId = await getUserId(expectedUid);
       if (!userId) return false;
 
       const studentRef = doc(db, TUTORS_COLLECTION, userId, STUDENTS_SUBCOLLECTION, studentId);
@@ -145,11 +147,11 @@ export const firebaseService = {
   },
 
   // Delete a student
-  async deleteStudent(studentId: string): Promise<boolean> {
+  async deleteStudent(studentId: string, expectedUid?: string): Promise<boolean> {
     if (!isFirebaseConfigured()) return false;
 
     try {
-      const userId = await getUserId();
+      const userId = await getUserId(expectedUid);
       if (!userId) return false;
 
       const studentRef = doc(db, TUTORS_COLLECTION, userId, STUDENTS_SUBCOLLECTION, studentId);
@@ -175,25 +177,27 @@ export const firebaseService = {
       );
 
       const querySnapshot = await getDocs(sessionsRef);
+      if (querySnapshot.metadata.fromCache) throw new Error('Cloud session history is unavailable.');
       return querySnapshot.docs.map(docSnap => ({
         id: docSnap.id,
         ...docSnap.data(),
       } as Session));
     } catch (error) {
       console.error('Error fetching sessions:', error);
-      return [];
+      throw error;
     }
   },
 
   // Create a session
-  async createSession(studentId: string, sessionData: Omit<Session, 'id'>): Promise<Session | null> {
+  async createSession(studentId: string, session: Session, expectedUid?: string): Promise<Session | null> {
     if (!isFirebaseConfigured()) return null;
 
     try {
-      const userId = await getUserId();
+      const userId = await getUserId(expectedUid);
       if (!userId) return null;
 
-      const sessionId = crypto.randomUUID();
+      const { id: sessionId, ...sessionData } = session;
+      if (!sessionId) return null;
       const sessionRef = doc(
         db,
         TUTORS_COLLECTION,
@@ -222,11 +226,11 @@ export const firebaseService = {
   },
 
   // Delete a session
-  async deleteSession(studentId: string, sessionId: string): Promise<boolean> {
+  async deleteSession(studentId: string, sessionId: string, expectedUid?: string): Promise<boolean> {
     if (!isFirebaseConfigured()) return false;
 
     try {
-      const userId = await getUserId();
+      const userId = await getUserId(expectedUid);
       if (!userId) return false;
 
       const sessionRef = doc(
@@ -260,25 +264,27 @@ export const firebaseService = {
       );
 
       const querySnapshot = await getDocs(paymentsRef);
+      if (querySnapshot.metadata.fromCache) throw new Error('Cloud payment history is unavailable.');
       return querySnapshot.docs.map(docSnap => ({
         id: docSnap.id,
         ...docSnap.data(),
       } as Payment));
     } catch (error) {
       console.error('Error fetching payments:', error);
-      return [];
+      throw error;
     }
   },
 
   // Create a payment
-  async createPayment(studentId: string, paymentData: Omit<Payment, 'id'>): Promise<Payment | null> {
+  async createPayment(studentId: string, payment: Payment, expectedUid?: string): Promise<Payment | null> {
     if (!isFirebaseConfigured()) return null;
 
     try {
-      const userId = await getUserId();
+      const userId = await getUserId(expectedUid);
       if (!userId) return null;
 
-      const paymentId = crypto.randomUUID();
+      const { id: paymentId, ...paymentData } = payment;
+      if (!paymentId) return null;
       const paymentRef = doc(
         db,
         TUTORS_COLLECTION,
@@ -307,11 +313,11 @@ export const firebaseService = {
   },
 
   // Delete a payment
-  async deletePayment(studentId: string, paymentId: string): Promise<boolean> {
+  async deletePayment(studentId: string, paymentId: string, expectedUid?: string): Promise<boolean> {
     if (!isFirebaseConfigured()) return false;
 
     try {
-      const userId = await getUserId();
+      const userId = await getUserId(expectedUid);
       if (!userId) return false;
 
       const paymentRef = doc(

@@ -81,6 +81,14 @@ GitHub scheduled workflows run only from the repository default branch (`main`).
 
 ## Security
 
+### Reliable student saves and offline recovery
+
+Student, session, and payment edits are saved to a durable queue owned by the signed-in tutor before network sync begins. Entity IDs remain unchanged during retries. Failed edits remain visible and can be retried using **Retry sync**. The queue resumes on startup, reconnect, or returning to the app; one failed operation blocks its dependent operations until it succeeds. Automatic retries stop after three failures; the retry button can restart them.
+
+A cloud read must finish successfully before replacing the current snapshot. Pending local edits are merged into that snapshot. Session and payment form dates follow the device's local calendar date, including after midnight in Bangladesh.
+
+On upgrade, the earlier account-specific student cache (`tutortrack_data_v1_<uid>`) and the older unowned queue (`tutortrack_sync_queue_v1`) are preserved. New caches and operations use version 2. The old queue is never automatically assigned to whoever signs in next. If an older record was already written beneath a mismatched student ID, reconnecting it requires recovery after confirming the owner and correct student; this release does not guess those relationships or rewrite historical cloud records. Keep browser data until any needed recovery is complete.
+
 - Do not commit `.env.local` or any real environment file.
 - Firebase web config identifies your Firebase project; access control still depends on Authentication and Firestore Security Rules.
 - Review `firestore.rules` before production use.

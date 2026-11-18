@@ -2,24 +2,27 @@ import React, { useEffect, useState } from 'react';
 import { Modal } from './Modal';
 import { Button } from './Button';
 import { Session } from '../types';
+import { localDate } from '../services/localDate';
 import { CalendarDays, Clock3, CheckCircle2, AlertCircle, XCircle } from 'lucide-react';
 
 interface SessionModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (sessionData: Omit<Session, 'id'>) => void;
+  onSubmit: (sessionData: Omit<Session, 'id'>) => boolean;
   studentName: string;
 }
 
 export const SessionModal: React.FC<SessionModalProps> = ({ isOpen, onClose, onSubmit, studentName }) => {
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(localDate());
+  const [error, setError] = useState('');
   const [duration, setDuration] = useState(60);
   const [status, setStatus] = useState<Session['status']>('completed');
   const [notes, setNotes] = useState('');
 
   useEffect(() => {
     if (isOpen) {
-      setDate(new Date().toISOString().split('T')[0]);
+      setDate(localDate());
+      setError('');
       setDuration(60);
       setStatus('completed');
       setNotes('');
@@ -28,7 +31,10 @@ export const SessionModal: React.FC<SessionModalProps> = ({ isOpen, onClose, onS
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit({ date: new Date(date).toISOString(), durationMinutes: duration, status, notes: notes.trim() || undefined });
+    if (!onSubmit({ date: new Date(date).toISOString(), durationMinutes: duration, status, notes: notes.trim() || undefined })) {
+      setError('Unable to save. Check browser storage and try again.');
+      return;
+    }
     onClose();
   };
 
@@ -37,6 +43,7 @@ export const SessionModal: React.FC<SessionModalProps> = ({ isOpen, onClose, onS
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={`Log session · ${studentName}`}>
       <form onSubmit={handleSubmit} className="space-y-4">
+        {error && <p role="alert" className="text-xs text-red-700">{error}</p>}
         <div className="grid grid-cols-2 gap-3">
           <div><label className="block text-xs font-bold text-[#666374] mb-2">Date</label><div className="relative"><CalendarDays className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#aaa6b2]"/><input type="date" required value={date} onChange={e => setDate(e.target.value)} className={`${field} pl-10`} /></div></div>
           <div><label className="block text-xs font-bold text-[#666374] mb-2">Duration</label><div className="relative"><Clock3 className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#aaa6b2]"/><input type="number" required min="15" step="15" value={duration} onChange={e => setDuration(Number(e.target.value))} className={`${field} pl-10`} /></div></div>

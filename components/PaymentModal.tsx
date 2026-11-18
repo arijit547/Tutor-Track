@@ -2,32 +2,38 @@ import React, { useState } from 'react';
 import { Modal } from './Modal';
 import { Button } from './Button';
 import { Payment } from '../types';
+import { localDate } from '../services/localDate';
 import { CalendarDays, WalletCards } from 'lucide-react';
 
 interface PaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (paymentData: Omit<Payment, 'id'>) => void;
+  onSubmit: (paymentData: Omit<Payment, 'id'>) => boolean;
   studentName: string;
   suggestedAmount: number;
 }
 
 export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onSubmit, studentName, suggestedAmount }) => {
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(localDate());
+  const [error, setError] = useState('');
   const [amount, setAmount] = useState(suggestedAmount > 0 ? suggestedAmount : 0);
   const [notes, setNotes] = useState('');
 
   React.useEffect(() => {
     if (isOpen) {
       setAmount(suggestedAmount > 0 ? suggestedAmount : 0);
-      setDate(new Date().toISOString().split('T')[0]);
+      setDate(localDate());
+      setError('');
       setNotes('');
     }
   }, [isOpen, suggestedAmount]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit({ date: new Date(date).toISOString(), amount, notes: notes.trim() || undefined });
+    if (!onSubmit({ date: new Date(date).toISOString(), amount, notes: notes.trim() || undefined })) {
+      setError('Unable to save. Check browser storage and try again.');
+      return;
+    }
     onClose();
   };
 
@@ -36,6 +42,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onS
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={`Record payment · ${studentName}`}>
       <form onSubmit={handleSubmit} className="space-y-4">
+        {error && <p role="alert" className="text-xs text-red-700">{error}</p>}
         {suggestedAmount > 0 && (
           <div className="rounded-[18px] bg-[#f4f1e9] p-4 flex items-center justify-between gap-4">
             <div><p className="text-[10px] font-bold uppercase tracking-[.12em] text-[#9b96a0]">Current outstanding</p><p className="mt-1 text-lg font-extrabold text-[#343247]">৳{suggestedAmount.toLocaleString()}</p></div>

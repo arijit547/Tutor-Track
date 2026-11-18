@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Student, Session, Payment, ViewState } from './types';
-import { MOCK_STUDENTS } from './constants';
 import { Dashboard } from './components/Dashboard';
 import { StudentDetail } from './components/StudentDetail';
 import { SessionModal } from './components/SessionModal';
@@ -12,8 +11,7 @@ import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { PasswordResetPage } from './pages/PasswordResetPage';
 import { Bell, BellOff, CloudSync, AlertCircle, LogOut, Settings, MapPin, LayoutDashboard, WalletCards, Wifi, WifiOff } from 'lucide-react';
-import { firebaseService } from './services/firebaseService';
-import { syncService } from './services/syncService';
+import { syncService, type SyncIntent } from './services/syncService';
 import { isFirebaseConfigured } from './services/firebase';
 import { useAuth } from './context/AuthContext';
 import { useLocationTracking } from './hooks/useLocationTracking';
@@ -32,7 +30,10 @@ const App: React.FC = () => {
   // --- State ---
   const [students, setStudents] = useState<Student[]>([]);
   const [loadedUid, setLoadedUid] = useState<string | null>(null);
-  const storageKey = currentUser ? `tutortrack_data_v1_${currentUser.uid}` : null;
+  const activeUid = useRef(currentUser?.uid);
+  activeUid.current = currentUser?.uid;
+  const loadGeneration = useRef(0);
+  const [legacyChanges, setLegacyChanges] = useState(false);
   const [currentView, setCurrentView] = useState<ViewState>('dashboard');
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
 
@@ -84,79 +85,98 @@ const App: React.FC = () => {
 
   // --- Effects ---
 
-  // Isolate cached student locations and reject loads from a previous account.
+  const refreshStudents = async (uid: string, retryFailed = false) => {
+    const generation = loadGeneration.current;
+    const isCurrent = () => activeUid.current === uid && loadGeneration.current === generation;
+    if (!isCurrent()) return;
+    setSyncing(true);
+    try {
+      const snapshot = await syncService.refreshStudents(uid, retryFailed);
+      if (isCurrent()) { setStudents(snapshot); setError(null); }
+    } catch {
+      if (isCurrent()) setError('Cloud sync is unavailable. Saved changes remain on this device; please retry.');
+    } finally {
+      if (isCurrent()) {
+        try { setPendingCount(syncService.getPendingCount(uid)); }
+        catch { setError('Saved changes could not be read. Keep this browser data for recovery.'); }
+        setSyncing(false);
+        setLoading(false);
+      }
+    }
+  };
+
+  // Load the owner's durable edits before a remote snapshot can replace the view.
   useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
+    loadGeneration.current++;
+    const uid = currentUser?.uid;
+    setLoading(Boolean(uid));
     setLoadedUid(null);
     setStudents([]);
+    setPendingCount(0);
+    setSyncing(false);
+    setError(null);
     setSelectedStudentId(null);
     setCurrentView('dashboard');
     setIsSessionModalOpen(false);
     setIsPaymentModalOpen(false);
     setIsStudentFormModalOpen(false);
-    const loadData = async () => {
-      if (!currentUser || !storageKey) { setLoading(false); return; }
-      const cached = () => {
-        try {
-          const value = JSON.parse(localStorage.getItem(storageKey) || 'null');
-          return Array.isArray(value) ? value as Student[] : [];
-        } catch { return []; }
-      };
-      try {
-        const cloud = isFirebaseConfigured() ? await firebaseService.getAllStudents() : null;
-        if (cancelled) return;
-        const saved = cached();
-        setStudents(cloud?.length ? cloud : saved.length ? saved : cloud ? [] : MOCK_STUDENTS);
-      } catch {
-        if (!cancelled) setStudents(cached());
-      } finally {
-        if (!cancelled) { setLoadedUid(currentUser.uid); setLoading(false); }
-      }
+    if (!uid) return;
+    try {
+      const cached = syncService.getCachedStudents(uid);
+      setStudents(cached);
+      if (cached.length) setLoading(false);
+      setPendingCount(syncService.getPendingCount(uid));
+      setLegacyChanges(syncService.hasLegacyOperations());
+      setLoadedUid(uid);
+    } catch {
+      setError('Saved data could not be read. Keep this browser data for recovery.');
+      setLoading(false);
+      return;
+    }
+    void refreshStudents(uid);
+    const resume = () => { void refreshStudents(uid); };
+    window.addEventListener('online', resume);
+    window.addEventListener('focus', resume);
+    const storageChanged = (event: StorageEvent) => {
+      if (event.key === `tutortrack_data_v2_${uid}`
+        || event.key?.startsWith(`tutortrack_sync_queue_v2:${encodeURIComponent(uid)}:`)) resume();
     };
-    void loadData();
-    return () => { cancelled = true; };
-  }, [currentUser?.uid, storageKey]);
-
-  useEffect(() => {
-    if (!storageKey || loading || loadedUid !== currentUser?.uid) return;
-    try { localStorage.setItem(storageKey, JSON.stringify(students)); }
-    catch { setError('Browser storage is full or unavailable. Keep your connection on so changes can sync.'); }
-  }, [students, storageKey, loadedUid, currentUser?.uid, loading]);
-
-  // Online/Offline status
-  useEffect(() => {
-    const handleOnline = () => {
-      setIsOnline(true);
-      setError(null);
-      // Process pending operations when coming online
-      setTimeout(() => {
-        syncService.processPendingOperations().then(() => {
-          setPendingCount(syncService.getPendingCount());
-        });
-      }, 1000);
-    };
-
-    const handleOffline = () => {
-      setIsOnline(false);
-    };
-
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-
+    window.addEventListener('storage', storageChanged);
     return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
+      loadGeneration.current++;
+      window.removeEventListener('online', resume);
+      window.removeEventListener('focus', resume);
+      window.removeEventListener('storage', storageChanged);
+    };
+  }, [currentUser?.uid]);
+
+  useEffect(() => {
+    const online = () => setIsOnline(true);
+    const offline = () => setIsOnline(false);
+    window.addEventListener('online', online);
+    window.addEventListener('offline', offline);
+    return () => {
+      window.removeEventListener('online', online);
+      window.removeEventListener('offline', offline);
     };
   }, []);
 
-  // Update pending count periodically
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setPendingCount(syncService.getPendingCount());
-    }, 2000);
-    return () => clearInterval(interval);
-  }, []);
+  // Persist the edit before showing success or starting a network request.
+  const persistEdit = (intent: SyncIntent): boolean => {
+    const uid = currentUser?.uid;
+    if (!uid || loadedUid !== uid) return false;
+    try {
+      syncService.queueOperation({ ...intent, uid });
+      setStudents(syncService.getCachedStudents(uid));
+      setPendingCount(syncService.getPendingCount(uid));
+      setError(null);
+      void refreshStudents(uid);
+      return true;
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Unable to save. Check browser storage and try again.');
+      return false;
+    }
+  };
 
   // --- Handlers ---
 
@@ -196,188 +216,36 @@ const App: React.FC = () => {
     setIsSessionModalOpen(true);
   };
 
-  const handleSessionSubmit = async (sessionData: Omit<Session, 'id'>) => {
-    if (!modalStudentId) return;
-
-    const newSession: Session = {
-      ...sessionData,
-      id: crypto.randomUUID(),
-    };
-
-    // Optimistic update
-    setStudents(prev => prev.map(s => {
-      if (s.id !== modalStudentId) return s;
-      return {
-        ...s,
-        sessions: [...s.sessions, newSession]
-      };
-    }));
-
-    // Sync to Firebase in background
-    if (isFirebaseConfigured() && isOnline) {
-      try {
-        await firebaseService.createSession(modalStudentId, sessionData);
-      } catch (err) {
-        console.error('Error syncing session:', err);
-        syncService.queueOperation({
-          type: 'createSession',
-          studentId: modalStudentId,
-          data: sessionData
-        });
-      }
-    } else {
-      // Queue for later sync
-      syncService.queueOperation({
-        type: 'createSession',
-        studentId: modalStudentId,
-        data: sessionData
-      });
-      setPendingCount(syncService.getPendingCount());
-    }
+  const handleSessionSubmit = (sessionData: Omit<Session, 'id'>): boolean => {
+    if (!modalStudentId) return false;
+    return persistEdit({ type: 'createSession', studentId: modalStudentId, data: { ...sessionData, id: crypto.randomUUID() } });
   };
 
-  // Payment Logging
   const openPaymentModal = (studentId: string) => {
     setModalStudentId(studentId);
     setIsPaymentModalOpen(true);
   };
 
-  const handlePaymentSubmit = async (paymentData: Omit<Payment, 'id'>) => {
-    if (!modalStudentId) return;
-
-    const newPayment: Payment = {
-      ...paymentData,
-      id: crypto.randomUUID(),
-    };
-
-    // Optimistic update
-    setStudents(prev => prev.map(s => {
-      if (s.id !== modalStudentId) return s;
-      return {
-        ...s,
-        payments: [...s.payments, newPayment]
-      };
-    }));
-
-    // Sync to Firebase in background
-    if (isFirebaseConfigured() && isOnline) {
-      try {
-        await firebaseService.createPayment(modalStudentId, paymentData);
-      } catch (err) {
-        console.error('Error syncing payment:', err);
-        syncService.queueOperation({
-          type: 'createPayment',
-          studentId: modalStudentId,
-          data: paymentData
-        });
-      }
-    } else {
-      // Queue for later sync
-      syncService.queueOperation({
-        type: 'createPayment',
-        studentId: modalStudentId,
-        data: paymentData
-      });
-      setPendingCount(syncService.getPendingCount());
-    }
+  const handlePaymentSubmit = (paymentData: Omit<Payment, 'id'>): boolean => {
+    if (!modalStudentId) return false;
+    return persistEdit({ type: 'createPayment', studentId: modalStudentId, data: { ...paymentData, id: crypto.randomUUID() } });
   };
 
-  // Student Management
   const openStudentForm = (studentId?: string) => {
     setEditingStudentId(studentId || null);
     setIsStudentFormModalOpen(true);
   };
 
-  const handleStudentSubmit = async (studentData: Omit<Student, 'id' | 'sessions' | 'payments' | 'joinedDate'>) => {
-    if (editingStudentId) {
-      // Edit existing student
-      setStudents(prev => prev.map(s => {
-        if (s.id !== editingStudentId) return s;
-        return {
-          ...s,
-          ...studentData
-        };
-      }));
-
-      // Sync to Firebase
-      if (isFirebaseConfigured() && isOnline) {
-        try {
-          await firebaseService.updateStudent(editingStudentId, studentData);
-        } catch (err) {
-          console.error('Error syncing student:', err);
-          syncService.queueOperation({
-            type: 'updateStudent',
-            studentId: editingStudentId,
-            data: { ...studentData, joinedDate: new Date().toISOString() }
-          });
-        }
-      } else {
-        syncService.queueOperation({
-          type: 'updateStudent',
-          studentId: editingStudentId,
-          data: studentData
-        });
-        setPendingCount(syncService.getPendingCount());
-      }
-    } else {
-      // Create new student
-      const newStudent: Student = {
-        ...studentData,
-        id: crypto.randomUUID(),
-        sessions: [],
-        payments: [],
-        joinedDate: new Date().toISOString()
-      };
-      setStudents(prev => [...prev, newStudent]);
-
-      // Sync to Firebase
-      if (isFirebaseConfigured() && isOnline) {
-        try {
-          await firebaseService.createStudent({
-            ...studentData,
-            joinedDate: newStudent.joinedDate
-          });
-        } catch (err) {
-          console.error('Error syncing student:', err);
-          syncService.queueOperation({
-            type: 'createStudent',
-            data: { ...studentData, joinedDate: new Date().toISOString() }
-          });
-        }
-      } else {
-        syncService.queueOperation({
-          type: 'createStudent',
-          data: studentData
-        });
-        setPendingCount(syncService.getPendingCount());
-      }
-    }
+  const handleStudentSubmit = (studentData: Omit<Student, 'id' | 'sessions' | 'payments' | 'joinedDate'>): boolean => {
+    if (editingStudentId) return persistEdit({ type: 'updateStudent', studentId: editingStudentId, data: studentData });
+    return persistEdit({ type: 'createStudent', data: {
+      ...studentData, id: crypto.randomUUID(), joinedDate: new Date().toISOString(),
+    } });
   };
 
-  const handleDeleteStudent = async (studentId: string) => {
-    if (confirm('Are you sure you want to delete this student? All sessions and payments will be lost.')) {
-      setStudents(prev => prev.filter(s => s.id !== studentId));
-      handleBackToDashboard();
-
-      // Sync to Firebase
-      if (isFirebaseConfigured() && isOnline) {
-        try {
-          await firebaseService.deleteStudent(studentId);
-        } catch (err) {
-          console.error('Error syncing delete:', err);
-          syncService.queueOperation({
-            type: 'deleteStudent',
-            studentId
-          });
-        }
-      } else {
-        syncService.queueOperation({
-          type: 'deleteStudent',
-          studentId
-        });
-        setPendingCount(syncService.getPendingCount());
-      }
-    }
+  const handleDeleteStudent = (studentId: string) => {
+    if (confirm('Are you sure you want to delete this student? All sessions and payments will be lost.')
+      && persistEdit({ type: 'deleteStudent', studentId })) handleBackToDashboard();
   };
 
   // Helper to get active modal student details
@@ -474,6 +342,18 @@ const App: React.FC = () => {
               <div className="mb-4 rounded-[16px] bg-[#fff4e8] border border-[#f0dfc8] px-4 py-3 flex items-center gap-3 text-[#805b30]">
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 <p className="text-xs font-semibold">You’re offline. Keep working—changes will be queued and synced when your connection returns.</p>
+              </div>
+            )}
+
+            {pendingCount > 0 && (
+              <div role="status" className="mb-4 rounded-[16px] border border-[#f0dfc8] bg-[#fff4e8] px-4 py-3 flex items-center justify-between gap-3">
+                <p className="text-xs font-semibold text-[#805b30]">{pendingCount} saved change{pendingCount === 1 ? '' : 's'} waiting to sync.</p>
+                <Button size="sm" disabled={!isOnline || syncing} onClick={() => { void refreshStudents(currentUser.uid, true); }}>Retry sync</Button>
+              </div>
+            )}
+            {legacyChanges && (
+              <div role="status" className="mb-4 rounded-[16px] border border-[#f0dfc8] bg-[#fff4e8] px-4 py-3 text-xs text-[#805b30]">
+                Older unsynced changes need recovery. They are preserved on this device; keep your browser data until they have been recovered.
               </div>
             )}
 
