@@ -1,22 +1,18 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowDownLeft, ArrowUpRight, CalendarDays, CheckCircle2, CloudOff,
   Download, Edit3, Landmark, PiggyBank, Plus, ReceiptText,
-  RefreshCw, Search, ShieldCheck, Trash2, WalletCards,
+  RefreshCw, RotateCcw, Search, ShieldCheck, Trash2, WalletCards,
 } from 'lucide-react';
 import { Button } from './Button';
-import { Modal } from './Modal';
+import { FinanceEntryForm, FinanceEntryModal } from './FinanceEntryForm';
+import { localDate } from '../services/localDate';
 import { FinanceBudget, FinanceTransaction, FinanceTransactionType, Student } from '../types';
 import { mergeFinanceEntries, personalFinanceService, readFinanceCache } from '../services/personalFinanceService';
 import { isFirebaseConfigured } from '../services/firebase';
 
-const incomeCategories = ['Salary', 'Freelance', 'Business', 'Gift', 'Investment', 'Other income'];
-const expenseCategories = ['Food', 'Transport', 'Housing', 'Utilities', 'Education', 'Shopping', 'Health', 'Entertainment', 'Family', 'Savings', 'Other expense'];
 const money = (n: number) => `৳${n.toLocaleString('en-BD', { maximumFractionDigits: 2, minimumFractionDigits: 0 })}`;
-const todayLocal = () => {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-};
+const todayLocal = localDate;
 const monthTitle = (month: string) => new Date(`${month}-01T12:00:00`).toLocaleDateString('en-BD', { month: 'long', year: 'numeric' });
 
 type DisplayEntry = Pick<FinanceTransaction, 'id' | 'date' | 'type' | 'category' | 'amount' | 'note'> & { source: 'personal' | 'tuition' };
@@ -215,106 +211,6 @@ const SpendingHeatmap: React.FC<{ month: string; daily: Record<number, number> }
   </div>;
 };
 
-const FinanceEntryModal: React.FC<{
-  isOpen: boolean;
-  editing: FinanceTransaction | null;
-  initialType: FinanceTransactionType;
-  onClose: () => void;
-  onSave: (item: FinanceTransaction) => Promise<void>;
-}> = ({ isOpen, editing, initialType, onClose, onSave }) => {
-  const [type, setType] = useState<FinanceTransactionType>('expense');
-  const [amount, setAmount] = useState('');
-  const [category, setCategory] = useState('Food');
-  const [date, setDate] = useState(todayLocal());
-  const [note, setNote] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [formError, setFormError] = useState('');
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const nextType = editing?.type ?? initialType;
-    setType(nextType);
-    setAmount(editing ? String(editing.amount) : '');
-    setCategory(editing?.category ?? (nextType === 'income' ? 'Salary' : 'Food'));
-    setDate(editing?.date ?? todayLocal());
-    setNote(editing?.note ?? '');
-    setFormError('');
-    setSaving(false);
-  }, [isOpen, editing, initialType]);
-
-  const categories = type === 'income' ? incomeCategories : expenseCategories;
-  const inputClass = 'mt-1.5 w-full min-h-11 rounded-xl border border-[#e1ddd5] bg-[#fbfaf7] px-3.5 py-2.5 outline-none text-sm text-[#333149]';
-
-  const submit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    const value = Number(amount);
-    if (!Number.isFinite(value) || value <= 0 || value > 999999999999) {
-      setFormError('Enter a valid amount greater than zero.');
-      return;
-    }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(new Date(`${date}T12:00:00`).getTime()) || new Date(`${date}T12:00:00`).toISOString().slice(0, 10) !== date) {
-      setFormError('Choose a valid date.');
-      return;
-    }
-    setSaving(true);
-    setFormError('');
-    try {
-      await onSave({
-        id: editing?.id ?? crypto.randomUUID(),
-        type,
-        amount: Math.round(value * 100) / 100,
-        category: category.trim() || categories[0],
-        date,
-        note: note.trim(),
-        updatedAt: Math.max(Date.now(), (editing?.updatedAt || 0) + 1),
-      });
-      onClose();
-    } catch {
-      setFormError('Unable to save. Make sure your browser allows local storage.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Modal isOpen={isOpen} onClose={() => !saving && onClose()} title={editing ? 'Edit personal transaction' : 'New personal transaction'}>
-      <form onSubmit={submit} className="space-y-4">
-        <div className="grid grid-cols-2 gap-2 rounded-[16px] bg-[#f3f1eb] p-1">
-          {(['income', 'expense'] as const).map(value => (
-            <button key={value} type="button" onClick={() => {
-              setType(value);
-              setCategory(value === 'income' ? 'Salary' : 'Food');
-            }} className={`rounded-xl px-3 py-2.5 text-sm font-bold capitalize transition-colors ${type === value ? 'bg-white shadow-sm text-[#34326f]' : 'text-[#8b8795]'}`}>{value}</button>
-          ))}
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <label className="text-xs font-bold text-[#656174]">Amount (BDT)
-            <input autoFocus type="number" required min="0.01" max="999999999999" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" className={inputClass} />
-          </label>
-          <label className="text-xs font-bold text-[#656174]">Date
-            <input type="date" required value={date} onChange={e => setDate(e.target.value)} className={inputClass} />
-          </label>
-        </div>
-        <label className="block text-xs font-bold text-[#656174]">Category
-          <select className={inputClass} value={category} onChange={e => setCategory(e.target.value)}>
-            {!categories.includes(category) && <option value={category}>{category}</option>}
-            {categories.map(item => <option key={item} value={item}>{item}</option>)}
-          </select>
-        </label>
-        <label className="block text-xs font-bold text-[#656174]">Note <span className="font-normal text-[#a19daa]">(optional)</span>
-          <textarea className={`${inputClass} resize-none`} rows={3} maxLength={280} value={note} onChange={e => setNote(e.target.value)} placeholder="What was this for?" />
-        </label>
-        {type === 'income' && <p className="text-xs text-[#827d8d]">Tuition payments logged through student profiles are included automatically. Don't enter those again.</p>}
-        {formError && <p role="alert" className="text-xs font-semibold text-[#b34a43]">{formError}</p>}
-        <div className="pt-3 border-t border-[#efede6] flex justify-end gap-2">
-          <Button type="button" variant="ghost" onClick={onClose} disabled={saving}>Cancel</Button>
-          <Button type="submit" disabled={saving}>{saving ? 'Saving…' : editing ? 'Save changes' : 'Add transaction'}</Button>
-        </div>
-      </form>
-    </Modal>
-  );
-};
-
 export const PersonalFinance: React.FC<{ uid: string; students: Student[] }> = ({ uid, students }) => {
   const [store, setStore] = useState(() => readFinanceCache(uid));
   const [synced, setSynced] = useState(false);
@@ -329,6 +225,11 @@ export const PersonalFinance: React.FC<{ uid: string; students: Student[] }> = (
   const [editingBudget, setEditingBudget] = useState(false);
   const [budgetDraft, setBudgetDraft] = useState('');
   const [notice, setNotice] = useState('');
+  const [lastAdded, setLastAdded] = useState<FinanceTransaction | null>(null);
+  const [undoBusy, setUndoBusy] = useState(false);
+  const [quickType, setQuickType] = useState<FinanceTransactionType>('expense');
+  const [quickFocus, setQuickFocus] = useState(0);
+  const entryOpener = useRef<HTMLElement | null>(null);
   const [trendWindow, setTrendWindow] = useState<6 | 12>(6);
 
   useEffect(() => {
@@ -424,15 +325,34 @@ export const PersonalFinance: React.FC<{ uid: string; students: Student[] }> = (
   }, {}), [entries, month]);
 
   const handleSave = async (entry: FinanceTransaction) => {
+    const isNew = !store.entries.some(item => item.id === entry.id);
     const ok = await personalFinanceService.saveEntry(uid, entry);
     setStore(readFinanceCache(uid));
     setSynced(ok);
-    setNotice(ok ? 'Transaction saved and synced.' : 'Transaction saved on this device. Cloud sync pending.');
+    setLastAdded(isNew ? entry : null);
+    const label = entry.type === 'income' ? 'Income' : 'Expense';
+    setNotice(ok ? `${label} saved.` : `${label} saved on this device. Cloud sync pending.`);
+  };
+
+  const undoLastEntry = async () => {
+    if (!lastAdded || undoBusy) return;
+    setUndoBusy(true);
+    try {
+      const latest = readFinanceCache(uid).entries.find(item => item.id === lastAdded.id) ?? lastAdded;
+      const ok = await personalFinanceService.saveEntry(uid, { ...latest, deleted: true, updatedAt: Math.max(Date.now(), latest.updatedAt + 1) });
+      setStore(readFinanceCache(uid));
+      setSynced(ok);
+      setLastAdded(null);
+      setNotice(ok ? 'Entry undone.' : 'Entry undone on this device. Cloud sync pending.');
+    } catch {
+      setNotice('Unable to undo. Try again or delete the entry from your transactions.');
+    } finally { setUndoBusy(false); }
   };
 
   const handleDelete = async (id: string) => {
     const original = store.entries.find(item => item.id === id);
     if (!original || !window.confirm('Delete this personal transaction?')) return;
+    setLastAdded(null);
     try {
       const ok = await personalFinanceService.saveEntry(uid, { ...original, deleted: true, updatedAt: Math.max(Date.now(), original.updatedAt + 1) });
       setStore(readFinanceCache(uid));
@@ -445,6 +365,7 @@ export const PersonalFinance: React.FC<{ uid: string; students: Student[] }> = (
 
   const handleSaveBudget = async (event: React.FormEvent) => {
     event.preventDefault();
+    setLastAdded(null);
     const amount = Number(budgetDraft);
     if (!Number.isFinite(amount) || amount < 0 || amount > 999999999999) {
       setNotice('Enter a valid monthly limit (zero means no limit).');
@@ -464,8 +385,22 @@ export const PersonalFinance: React.FC<{ uid: string; students: Student[] }> = (
 
   const startNewEntry = (type: FinanceTransactionType) => {
     setEditing(null);
-    setInitialType(type);
-    setEntryModal(true);
+    if (window.matchMedia('(min-width: 640px)').matches) {
+      setQuickType(type);
+      setQuickFocus(value => value + 1);
+      document.getElementById('finance-quick-entry')?.scrollIntoView({
+        behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'center',
+      });
+    } else {
+      entryOpener.current = document.activeElement as HTMLElement;
+      setInitialType(type);
+      setEntryModal(true);
+    }
+  };
+
+  const closeEntryModal = () => {
+    setEntryModal(false);
+    requestAnimationFrame(() => entryOpener.current?.focus({ preventScroll: true }));
   };
 
   const exportCSV = () => {
@@ -495,7 +430,7 @@ export const PersonalFinance: React.FC<{ uid: string; students: Student[] }> = (
   const monthCaption = allTime ? 'All-time activity' : monthTitle(month);
 
   return (
-    <div className="space-y-5 sm:space-y-6">
+    <div className="space-y-5 sm:space-y-6 pb-24 sm:pb-0">
       <section className="relative overflow-hidden rounded-[28px] bg-[#29285d] px-5 py-6 sm:px-8 sm:py-8 text-white shadow-[0_18px_48px_rgba(41,40,93,.18)]">
         <div className="absolute -top-24 -right-20 h-72 w-72 rounded-full bg-[#58569d]/30 blur-2xl pointer-events-none" />
         <div className="relative flex flex-col md:flex-row md:items-center md:justify-between gap-5">
@@ -525,7 +460,11 @@ export const PersonalFinance: React.FC<{ uid: string; students: Student[] }> = (
         </span>
       </div>
 
-      {notice && <div role="status" className="rounded-2xl bg-[#f0eee6] text-[#5b5670] px-4 py-3 flex items-center justify-between gap-3 text-xs font-semibold"><span>{notice}</span><button onClick={() => setNotice('')} aria-label="Dismiss message" className="shrink-0 text-[#898493] hover:text-[#34326f]">✕</button></div>}
+      {notice && <div role="status" className="fixed z-[60] bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] left-4 right-4 sm:left-auto sm:right-6 sm:bottom-6 sm:max-w-md rounded-2xl border border-[#ddd6e8] bg-[#fffefa] shadow-[0_12px_40px_rgba(52,43,75,.18)] px-4 py-3 flex items-center gap-3">
+        <span className="flex-1 min-w-0 text-xs font-semibold leading-5 text-[#5b5070]">{notice}</span>
+        {lastAdded && <button type="button" onClick={() => void undoLastEntry()} disabled={undoBusy} aria-label="Undo last transaction" className="min-h-11 inline-flex items-center gap-1.5 rounded-lg px-2 text-xs font-bold text-[#64538b] disabled:opacity-50"><RotateCcw className="w-3.5 h-3.5" />{undoBusy ? 'Undoing…' : 'Undo'}</button>}
+        <button type="button" onClick={() => { setNotice(''); setLastAdded(null); }} aria-label="Dismiss message" className="h-11 w-11 shrink-0 rounded-xl text-[#968b9f] hover:bg-[#f1edf5]">✕</button>
+      </div>}
 
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
         <div className={cardClass}>
@@ -549,6 +488,14 @@ export const PersonalFinance: React.FC<{ uid: string; students: Student[] }> = (
           <p className="mt-1 text-[11px] text-[#938f9b]">Based on recorded transactions</p>
         </div>
       </div>
+
+      <section id="finance-quick-entry" aria-labelledby="finance-quick-title" className="hidden sm:block tt-card rounded-[24px] p-5 lg:p-6 scroll-mt-28">
+        <div className="mb-5 flex items-start justify-between gap-3">
+          <div><h2 id="finance-quick-title" className="text-lg font-extrabold tracking-tight text-[#3c3352]">Quick add</h2><p className="mt-1 text-xs text-[#9b90a6]">Record your everyday income and expenses.</p></div>
+          <span className="grid h-10 w-10 place-items-center rounded-2xl bg-[#f3eef8] text-[#8c7aa5]"><Plus className="w-4 h-4" /></span>
+        </div>
+        <FinanceEntryForm key={uid} initialType={quickType} focusRequest={quickFocus} entries={store.entries} onSave={handleSave} />
+      </section>
 
       <section className={`${cardClass} space-y-4`}>
         <div className="flex flex-wrap items-start justify-between gap-4">
@@ -628,12 +575,15 @@ export const PersonalFinance: React.FC<{ uid: string; students: Student[] }> = (
             <div className={`h-10 w-10 shrink-0 grid place-items-center rounded-[13px] ${entry.type === 'income' ? 'bg-[#eaf6ef] text-[#45886a]' : 'bg-[#fff1eb] text-[#c17460]'}`}>{entry.type === 'income' ? <ArrowDownLeft className="w-[18px] h-[18px]" /> : <ArrowUpRight className="w-[18px] h-[18px]" />}</div>
             <div className="flex-1 min-w-0"><div className="flex items-center flex-wrap gap-1.5"><p className="text-sm font-bold text-[#3a374f] truncate">{entry.category}</p>{entry.source === 'tuition' && <span className="text-[9px] font-bold rounded-full bg-[#f1eff8] text-[#68619d] px-2 py-0.5">Auto · tuition</span>}</div><p className="mt-1 text-[11px] text-[#92909a] truncate">{entry.date} {entry.note ? `· ${entry.note}` : ''}</p></div>
             <div className="text-right shrink-0"><p className={`text-sm font-extrabold ${entry.type === 'income' ? 'text-[#408063]' : 'text-[#b45b4d]'}`}>{entry.type === 'income' ? '+' : '−'}{money(entry.amount)}</p></div>
-            {entry.source === 'personal' && <div className="flex items-center shrink-0 ml-1 gap-1"><button aria-label={`Edit ${entry.category} ${entry.date}`} className="h-8 w-8 grid place-items-center rounded-lg text-[#8c8798] hover:text-[#524d86] hover:bg-[#efedf7]" onClick={() => { setEditing(store.entries.find(item => item.id === entry.id) || null); setInitialType(entry.type); setEntryModal(true); }}><Edit3 className="w-3.5 h-3.5" /></button><button aria-label={`Delete ${entry.category} ${entry.date}`} className="h-8 w-8 grid place-items-center rounded-lg text-[#a29baa] hover:text-[#b85346] hover:bg-[#fff0ed]" onClick={() => void handleDelete(entry.id)}><Trash2 className="w-3.5 h-3.5" /></button></div>}
+            {entry.source === 'personal' && <div className="flex items-center shrink-0 ml-1 gap-1"><button aria-label={`Edit ${entry.category} ${entry.date}`} className="h-8 w-8 grid place-items-center rounded-lg text-[#8c8798] hover:text-[#524d86] hover:bg-[#efedf7]" onClick={() => { entryOpener.current = document.activeElement as HTMLElement; setEditing(store.entries.find(item => item.id === entry.id) || null); setInitialType(entry.type); setEntryModal(true); }}><Edit3 className="w-3.5 h-3.5" /></button><button aria-label={`Delete ${entry.category} ${entry.date}`} className="h-8 w-8 grid place-items-center rounded-lg text-[#a29baa] hover:text-[#b85346] hover:bg-[#fff0ed]" onClick={() => void handleDelete(entry.id)}><Trash2 className="w-3.5 h-3.5" /></button></div>}
           </div>)}
         </div> : <div className="py-12 text-center px-6"><ReceiptText className="w-9 h-9 mx-auto text-[#c5becc]" /><p className="mt-3 text-sm font-extrabold text-[#3b394f]">No transactions found</p><p className="mt-1 text-xs text-[#948f9b]">Try another month or filter, or record your first transaction.</p><Button onClick={() => startNewEntry('expense')} size="sm" className="mt-4">Add a transaction</Button></div>}
       </section>
 
-      <FinanceEntryModal isOpen={entryModal} editing={editing} initialType={initialType} onClose={() => setEntryModal(false)} onSave={handleSave} />
+      <button type="button" disabled={entryModal} aria-hidden={entryModal} onClick={() => startNewEntry('expense')} aria-label="Add transaction" className="sm:hidden fixed z-40 bottom-[calc(env(safe-area-inset-bottom)+1rem)] left-1/2 -translate-x-1/2 min-h-14 w-[calc(100%-2rem)] max-w-sm rounded-2xl bg-[#514781] px-5 py-3.5 text-sm font-bold text-white shadow-[0_8px_28px_rgba(58,43,91,.28)] flex items-center justify-center gap-2 active:bg-[#403667] focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-[#b6a7cf]">
+        <Plus className="h-5 w-5" />Add transaction
+      </button>
+      <FinanceEntryModal isOpen={entryModal} editing={editing} initialType={initialType} entries={store.entries} onClose={closeEntryModal} onSave={handleSave} />
     </div>
   );
 };

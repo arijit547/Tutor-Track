@@ -96,6 +96,9 @@ On upgrade, the earlier account-specific student cache (`tutortrack_data_v1_<uid
 ## Personal finance: how it works
 
 - Sign in as a tutor and open **Finance** from the teacher panel (desktop or mobile). No student-facing Finance page is created.
+- On desktop, use **Quick add** above the charts: choose Income or Expense, enter an amount, tap a category, and save. **Today**, **Yesterday**, and **Choose date** keep date entry quick; notes are optional.
+- On mobile, the fixed **Add transaction** button opens a compact entry sheet. **Save & add another** clears the amount and note, retains the category/date, and returns focus to the amount field. Recent categories stay scoped to the signed-in tutor's recorded transactions.
+- After adding a new personal transaction, **Undo** removes that entry using the existing deletion-sync flow. Editing keeps the original record ID. If device storage prevents a save, the form keeps your draft and displays an error.
 - **Add expense / Add income** saves your own financial entries. Edit and delete are available on manual entries only.
 - Recorded student payments appear automatically as **Tuition payment** income; do not record the same payment manually in Finance.
 - Select a month (or All time), search, filter by transaction type, and export the visible rows to CSV. Amounts are in Bangladeshi taka (BDT).
