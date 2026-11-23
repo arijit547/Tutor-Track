@@ -36,7 +36,10 @@ jobs:
 
       - name: Generate Android platform files
         run: flutter create --no-pub --platforms=android --project-name=tutortrack_mobile --org=com.arijit547 .
-
+      
+      - name: Remove generated Flutter template test
+        run: rm -f test/widget_test.dart
+      
       - name: Install Flutter packages
         run: flutter pub get
 
