@@ -1,0 +1,27 @@
+name: tutortrack_mobile
+description: TutorTrack native mobile client, compatible with the TutorTrack Firestore collections.
+publish_to: none
+version: 0.1.0+1
+
+environment:
+  sdk: '>=3.6.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  firebase_core: ^5.1.0
+  firebase_auth: ^7.0.1
+  cloud_firestore: ^7.1.0
+  intl: ^0.20.2
+  uuid: ^4.5.2
+  geolocator: ^14.1.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/icon.png

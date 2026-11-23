@@ -1,0 +1,70 @@
+name: TutorTrack Flutter Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'mobile/**'
+      - '.github/workflows/flutter-android-apk.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-android-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter stable
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Generate Android platform files
+        run: flutter create --no-pub --platforms=android --project-name=tutortrack_mobile --org=com.arijit547 .
+
+      - name: Install Flutter packages
+        run: flutter pub get
+
+      - name: Configure Firebase from repository secret
+        env:
+          FIREBASE_ANDROID_JSON_B64: ${{ secrets.FIREBASE_ANDROID_JSON_B64 }}
+        run: |
+          set -euo pipefail
+          if [ -z "$FIREBASE_ANDROID_JSON_B64" ]; then
+            echo '::error::Missing secret FIREBASE_ANDROID_JSON_B64. See FLUTTER_APK_SETUP.md.'
+            exit 1
+          fi
+          printf '%s' "$FIREBASE_ANDROID_JSON_B64" | base64 --decode > android/app/google-services.json
+          python3 tool/configure_android.py android/app/google-services.json
+
+      - name: Flutter static analysis
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      - name: Run billing tests
+        run: flutter test
+
+      - name: Build Android release APK
+        run: flutter build apk --release
+
+      - name: Upload APK for download
+        uses: actions/upload-artifact@v4
+        with:
+          name: TutorTrack-Android-APK
+          path: mobile/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 14
