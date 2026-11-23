@@ -102,8 +102,8 @@ export const StudentFormModal: React.FC<StudentFormModalProps> = ({ isOpen, onCl
   const estimatedRate = Number(monthlySalary) > 0 && Number(sessionsPerMonth) > 0
     ? Number(monthlySalary) / Number(sessionsPerMonth) : 0;
   const historyExists = !!student && (student.sessions.length > 0 || student.payments.length > 0);
-  const field = 'w-full rounded-xl border bg-[#fbfaf7] px-3.5 py-2.5 text-sm outline-none';
-  const fieldBorder = (key: string) => errors[key] ? 'border-[#d98378]' : 'border-[#dcd8d0]';
+  const field = 'w-full rounded-xl border bg-[#fafbf8] px-3.5 py-2.5 text-sm outline-none';
+  const fieldBorder = (key: string) => errors[key] ? 'border-[#d98378]' : 'border-[#dce3da]';
 
   return (
     <>
@@ -121,8 +121,8 @@ export const StudentFormModal: React.FC<StudentFormModalProps> = ({ isOpen, onCl
 
           <div className="rounded-[20px] border border-[#e5e1d9] bg-[#faf8f3] p-4 space-y-4">
             <div>
-              <p className="text-sm font-extrabold text-[#39364d]">Monthly tuition agreement</p>
-              <p className="mt-1 text-xs text-[#888394]">Set the monthly salary first. We calculate an equivalent per-session rate automatically.</p>
+              <p className="text-sm font-semibold text-[#293c30]">Monthly tuition agreement</p>
+              <p className="mt-1 text-xs text-[#7a8f7c]">Set the monthly salary first. We calculate an equivalent per-session rate automatically.</p>
             </div>
             <div className="grid sm:grid-cols-2 gap-3">
               <Field label="Salary per month (BDT)" error={errors.salary} icon={<Banknote className="w-4 h-4" />}>
@@ -133,14 +133,14 @@ export const StudentFormModal: React.FC<StudentFormModalProps> = ({ isOpen, onCl
               </Field>
             </div>
             <div>
-              <p className="text-xs font-bold text-[#666374] mb-2">When is a tuition month completed?</p>
+              <p className="text-xs font-bold text-[#66766b] mb-2">When is a tuition month completed?</p>
               <div className="grid sm:grid-cols-2 gap-2">
-                <button type="button" onClick={() => setBillingMode('session-target')} aria-pressed={billingMode === 'session-target'} className={`text-left rounded-2xl border p-3 transition-all ${billingMode === 'session-target' ? 'border-[#56518f] bg-[#eeedf7] text-[#34316f]' : 'border-[#dedbd4] bg-white text-[#676477]'}`}>
-                  <span className="block text-xs font-extrabold">Fixed sessions per month</span>
+                <button type="button" onClick={() => setBillingMode('session-target')} aria-pressed={billingMode === 'session-target'} className={`text-left rounded-2xl border p-3 transition-colors ${billingMode === 'session-target' ? 'border-[#386c54] bg-[#eef3eb] text-[#285944]' : 'border-[#dedbd4] bg-white text-[#576a5b]'}`}>
+                  <span className="block text-xs font-semibold">Fixed sessions per month</span>
                   <span className="block mt-1 text-[11px] leading-4">Pay is earned by completed sessions, up to one monthly salary.</span>
                 </button>
-                <button type="button" onClick={() => setBillingMode('calendar-month')} aria-pressed={billingMode === 'calendar-month'} className={`text-left rounded-2xl border p-3 transition-all ${billingMode === 'calendar-month' ? 'border-[#56518f] bg-[#eeedf7] text-[#34316f]' : 'border-[#dedbd4] bg-white text-[#676477]'}`}>
-                  <span className="block text-xs font-extrabold">Calendar month</span>
+                <button type="button" onClick={() => setBillingMode('calendar-month')} aria-pressed={billingMode === 'calendar-month'} className={`text-left rounded-2xl border p-3 transition-colors ${billingMode === 'calendar-month' ? 'border-[#386c54] bg-[#eef3eb] text-[#285944]' : 'border-[#dedbd4] bg-white text-[#576a5b]'}`}>
+                  <span className="block text-xs font-semibold">Calendar month</span>
                   <span className="block mt-1 text-[11px] leading-4">Full monthly salary is due when the calendar month ends, regardless of sessions.</span>
                 </button>
               </div>
@@ -149,44 +149,44 @@ export const StudentFormModal: React.FC<StudentFormModalProps> = ({ isOpen, onCl
               <Field label={billingMode === 'session-target' ? 'Required sessions per month' : 'Planned sessions per month (optional)'} error={errors.sessions}>
                 <input type="number" min="1" step="1" value={sessionsPerMonth} onChange={e => setSessionsPerMonth(e.target.value)} placeholder="12" className={`${field} ${fieldBorder('sessions')}`} />
               </Field>
-              <div className="rounded-xl border border-[#ded9ed] bg-white px-4 py-3">
-                <p className="text-[10px] font-bold uppercase tracking-[.08em] text-[#918ca0]">Calculated per-session equivalent</p>
-                <p className="mt-1 text-lg font-extrabold text-[#34316f]">{estimatedRate ? `৳${estimatedRate.toLocaleString('en-BD', { maximumFractionDigits: 2 })}` : '—'}</p>
+              <div className="rounded-xl border border-[#eef3eb] bg-white px-4 py-3">
+                <p className="text-[10px] font-bold normal-case tracking-normal text-[#7a8f7c]">Calculated per-session equivalent</p>
+                <p className="mt-1 text-lg font-semibold text-[#285944]">{estimatedRate ? `৳${estimatedRate.toLocaleString('en-BD', { maximumFractionDigits: 2 })}` : '—'}</p>
               </div>
             </div>
-            <p className="text-[11px] leading-5 text-[#777287]">
+            <p className="text-[11px] leading-5 text-[#576a5b]">
               {billingMode === 'session-target'
                 ? 'Only completed sessions count. Extra sessions beyond the monthly target do not add charges automatically. Each calendar month has its own target.'
                 : 'The estimated per-session amount is informational only. Attendance does not change the fixed monthly fee; the fee becomes due after the month ends.'}
               {' '}The first calendar month is billed in full (no proration).
             </p>
-            {student && historyExists && <p className="text-[11px] font-semibold text-[#6c5687]">If you change salary or billing method, the new contract starts next calendar month so past billing stays unchanged.</p>}
+            {student && historyExists && <p className="text-[11px] font-semibold text-[#35644b]">If you change salary or billing method, the new contract starts next calendar month so past billing stays unchanged.</p>}
           </div>
 
           <Field label="Class time" icon={<Clock3 className="w-4 h-4" />}>
-            <input type="time" value={scheduleTime} onChange={e => setScheduleTime(e.target.value)} className={`${field} border-[#dcd8d0] pl-10`} />
+            <input type="time" value={scheduleTime} onChange={e => setScheduleTime(e.target.value)} className={`${field} border-[#dce3da] pl-10`} />
           </Field>
 
           <div>
-            <label className="block text-xs font-bold text-[#666374] mb-2">Weekly schedule</label>
+            <label className="block text-xs font-bold text-[#66766b] mb-2">Weekly schedule</label>
             <div className="grid grid-cols-7 gap-1.5">
-              {DAYS.map(day => <button key={day} type="button" onClick={() => toggleDay(day)} className={`h-9 rounded-xl text-[11px] font-extrabold transition-colors ${scheduleDays.includes(day) ? 'bg-[#34326f] text-white shadow-sm' : 'bg-[#f0eee8] text-[#777482] hover:bg-[#e8e5ed]'}`}>{day.slice(0,1)}</button>)}
+              {DAYS.map(day => <button key={day} type="button" onClick={() => toggleDay(day)} className={`h-9 rounded-xl text-[11px] font-semibold transition-colors ${scheduleDays.includes(day) ? 'bg-[#285944] text-white shadow-sm' : 'bg-[#f0eee8] text-[#777482] hover:bg-[#eef3eb]'}`}>{day.slice(0,1)}</button>)}
             </div>
             <p className="mt-2 text-[11px] text-[#9995a0]">Selected: {scheduleDays.length ? scheduleDays.join(', ') : 'none'}</p>
             {errors.days && <p className="mt-1 text-[11px] font-semibold text-[#b3584d]">{errors.days}</p>}
           </div>
 
           <Field label="Student email (optional)" icon={<Mail className="w-4 h-4" />}>
-            <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="student@example.com" className={`${field} border-[#dcd8d0] pl-10`} />
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="student@example.com" className={`${field} border-[#dce3da] pl-10`} />
           </Field>
 
           <div className="rounded-[18px] border border-[#e5e1d9] bg-[#faf8f3] p-4">
             <div className="flex items-start gap-3">
-              <div className="h-9 w-9 rounded-xl bg-white text-[#5b578b] grid place-items-center shrink-0"><MapPin className="w-4 h-4" /></div>
+              <div className="h-9 w-9 rounded-xl bg-white text-[#35644b] grid place-items-center shrink-0"><MapPin className="w-4 h-4" /></div>
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-extrabold text-[#4b485d]">Tuition location <span className="font-medium text-[#9995a1]">(optional)</span></p>
+                <p className="text-xs font-semibold text-[#576a5b]">Tuition location <span className="font-medium text-[#919c91]">(optional)</span></p>
                 <p className="mt-1 text-[11px] leading-5 text-[#8c8995]">Used only for the optional browser auto-session detector.</p>
-                {location && <p className="mt-2 text-[11px] font-semibold text-[#5e5a70] truncate">{location.latitude.toFixed(5)}, {location.longitude.toFixed(5)}</p>}
+                {location && <p className="mt-2 text-[11px] font-semibold text-[#576a5b] truncate">{location.latitude.toFixed(5)}, {location.longitude.toFixed(5)}</p>}
               </div>
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
@@ -200,11 +200,11 @@ export const StudentFormModal: React.FC<StudentFormModalProps> = ({ isOpen, onCl
           </div>
 
           <label className="flex items-center justify-between gap-4 rounded-[16px] border border-[#e5e1da] bg-white px-4 py-3 cursor-pointer">
-            <div><p className="text-xs font-extrabold text-[#4c495d]">Active student</p><p className="mt-0.5 text-[11px] text-[#96929e]">Show this student in the active schedule.</p></div>
-            <button type="button" onClick={() => setActive(v => !v)} className={`relative h-6 w-11 rounded-full transition-colors ${active ? 'bg-[#55518f]' : 'bg-[#d3cfd6]'}`} aria-pressed={active}><span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${active ? 'translate-x-6' : 'translate-x-1'}`} /></button>
+            <div><p className="text-xs font-semibold text-[#576a5b]">Active student</p><p className="mt-0.5 text-[11px] text-[#96929e]">Show this student in the active schedule.</p></div>
+            <button type="button" onClick={() => setActive(v => !v)} className={`relative h-6 w-11 rounded-full transition-colors ${active ? 'bg-[#386c54]' : 'bg-[#c2d0c1]'}`} aria-pressed={active}><span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${active ? 'translate-x-6' : 'translate-x-1'}`} /></button>
           </label>
 
-          <div className="pt-3 border-t border-[#eeece6] flex justify-end gap-2"><Button type="button" variant="ghost" onClick={onClose}>Cancel</Button><Button type="submit">{student ? 'Save changes' : 'Add student'}</Button></div>
+          <div className="pt-3 border-t border-[#e9eee7] flex justify-end gap-2"><Button type="button" variant="ghost" onClick={onClose}>Cancel</Button><Button type="submit">{student ? 'Save changes' : 'Add student'}</Button></div>
         </form>
       </Modal>
 
@@ -215,8 +215,8 @@ export const StudentFormModal: React.FC<StudentFormModalProps> = ({ isOpen, onCl
 
 const Field: React.FC<{ label: string; error?: string; icon?: React.ReactNode; children: React.ReactNode }> = ({ label, error, icon, children }) => (
   <div>
-    <label className="block text-xs font-bold text-[#666374] mb-2">{label}</label>
-    <div className="relative">{icon && <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#aaa6b2] pointer-events-none">{icon}</span>}{children}</div>
+    <label className="block text-xs font-bold text-[#66766b] mb-2">{label}</label>
+    <div className="relative">{icon && <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#9ba69a] pointer-events-none">{icon}</span>}{children}</div>
     {error && <p className="mt-1 text-[11px] font-semibold text-[#b3584d]">{error}</p>}
   </div>
 );

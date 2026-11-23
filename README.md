@@ -105,3 +105,7 @@ On upgrade, the earlier account-specific student cache (`tutortrack_data_v1_<uid
 - **Monthly expense limit** applies to every month and tracks manual expense entries only. Cash flow is **recorded income − recorded expenses**; it is not an account balance imported from a bank.
 - Personal entries and the budget are cached locally using a **user-specific browser key**. With Firebase configured, they sync into `tutors/{userId}/financeEntries/{entryId}` and `tutors/{userId}/financeSettings/general`. If offline, local changes are retried when Finance is opened again or the app comes online. Browser storage may be lost if site data is cleared before a successful sync.
 - **Security:** Only the authenticated user whose UID matches the tutor document can read/write these paths, enforced by `firestore.rules`. Do **not** skip publishing the updated rules. Users of the same device should use separate signed-in accounts, and should sign out when finished.
+
+## UI design notes
+
+The interface was refined using the principles of [unslop by Damir Sokolovsky](https://github.com/heydamir/unslop) (CC BY 4.0). See [UNSLOP_NOTES.md](UNSLOP_NOTES.md) for the design direction, changes and validation limitations.

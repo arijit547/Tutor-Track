@@ -38,34 +38,34 @@ export const SessionModal: React.FC<SessionModalProps> = ({ isOpen, onClose, onS
     onClose();
   };
 
-  const field = 'w-full rounded-xl border border-[#dcd8d0] bg-[#fbfaf7] px-3.5 py-2.5 text-sm outline-none';
+  const field = 'w-full rounded-xl border border-[#dce3da] bg-[#fafbf8] px-3.5 py-2.5 text-sm outline-none';
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={`Log session · ${studentName}`}>
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && <p role="alert" className="text-xs text-red-700">{error}</p>}
         <div className="grid grid-cols-2 gap-3">
-          <div><label className="block text-xs font-bold text-[#666374] mb-2">Date</label><div className="relative"><CalendarDays className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#aaa6b2]"/><input type="date" required value={date} onChange={e => setDate(e.target.value)} className={`${field} pl-10`} /></div></div>
-          <div><label className="block text-xs font-bold text-[#666374] mb-2">Duration</label><div className="relative"><Clock3 className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#aaa6b2]"/><input type="number" required min="15" step="15" value={duration} onChange={e => setDuration(Number(e.target.value))} className={`${field} pl-10`} /></div></div>
+          <div><label className="block text-xs font-bold text-[#66766b] mb-2">Date</label><div className="relative"><CalendarDays className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9ba69a]"/><input type="date" required value={date} onChange={e => setDate(e.target.value)} className={`${field} pl-10`} /></div></div>
+          <div><label className="block text-xs font-bold text-[#66766b] mb-2">Duration</label><div className="relative"><Clock3 className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9ba69a]"/><input type="number" required min="15" step="15" value={duration} onChange={e => setDuration(Number(e.target.value))} className={`${field} pl-10`} /></div></div>
         </div>
 
         <div>
-          <label className="block text-xs font-bold text-[#666374] mb-2">Session status</label>
+          <label className="block text-xs font-bold text-[#66766b] mb-2">Session status</label>
           <div className="grid grid-cols-3 gap-2">
             {([
               ['completed', 'Completed', CheckCircle2],
               ['missed', 'Missed', AlertCircle],
               ['cancelled', 'Cancelled', XCircle],
             ] as const).map(([value, label, Icon]) => (
-              <button key={value} type="button" onClick={() => setStatus(value)} className={`rounded-xl border px-2 py-3 text-xs font-bold flex flex-col sm:flex-row items-center justify-center gap-1.5 transition-colors ${status === value ? 'border-[#8d88bd] bg-[#f0eef8] text-[#4d497e]' : 'border-[#e1ddd6] bg-white text-[#807d89] hover:bg-[#f8f6f1]'}`}><Icon className="w-4 h-4" /> {label}</button>
+              <button key={value} type="button" onClick={() => setStatus(value)} className={`rounded-xl border px-2 py-3 text-xs font-bold flex flex-col sm:flex-row items-center justify-center gap-1.5 transition-colors ${status === value ? 'border-[#7a8f7c] bg-[#edf2e9] text-[#35644b]' : 'border-[#e1ddd6] bg-white text-[#807d89] hover:bg-[#f7f9f5]'}`}><Icon className="w-4 h-4" /> {label}</button>
             ))}
           </div>
           {status === 'missed' && <p className="mt-2 text-[11px] text-[#9a6b32] bg-[#fff6e6] rounded-xl px-3 py-2">Missed sessions are counted as chargeable in the current billing logic.</p>}
         </div>
 
-        <div><label className="block text-xs font-bold text-[#666374] mb-2">Notes <span className="font-medium text-[#a5a1ab]">(optional)</span></label><textarea rows={3} value={notes} onChange={e => setNotes(e.target.value)} className={`${field} resize-none`} placeholder="Topics covered, homework, progress…" /></div>
+        <div><label className="block text-xs font-bold text-[#66766b] mb-2">Notes <span className="font-medium text-[#9ea99e]">(optional)</span></label><textarea rows={3} value={notes} onChange={e => setNotes(e.target.value)} className={`${field} resize-none`} placeholder="Topics covered, homework, progress…" /></div>
 
-        <div className="pt-3 border-t border-[#eeece6] flex justify-end gap-2"><Button type="button" variant="ghost" onClick={onClose}>Cancel</Button><Button type="submit">Save session</Button></div>
+        <div className="pt-3 border-t border-[#e9eee7] flex justify-end gap-2"><Button type="button" variant="ghost" onClick={onClose}>Cancel</Button><Button type="submit">Save session</Button></div>
       </form>
     </Modal>
   );

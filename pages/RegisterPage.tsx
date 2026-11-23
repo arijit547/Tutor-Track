@@ -44,40 +44,40 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onSwitchToLogin }) =
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block text-xs font-bold text-[#5f5c6d] mb-2">Full name *</label>
-          <div className="relative"><User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-[#aaa6b2]"/><input type="text" value={displayName} onChange={e => setDisplayName(e.target.value)} placeholder="Your name" className="w-full h-12 pl-[42px] pr-4 bg-[#fbfaf7] border border-[#ddd9d1] rounded-xl outline-none text-sm" disabled={loading}/></div>
+          <label className="block text-xs font-bold text-[#617265] mb-2">Full name *</label>
+          <div className="relative"><User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-[#9ba69a]"/><input type="text" value={displayName} onChange={e => setDisplayName(e.target.value)} placeholder="Your name" className="w-full h-12 pl-[42px] pr-4 bg-[#fafbf8] border border-[#dce3da] rounded-xl outline-none text-sm" disabled={loading}/></div>
         </div>
 
         <div className="grid sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-bold text-[#5f5c6d] mb-2">Email *</label>
-            <div className="relative"><Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-[#aaa6b2]"/><input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" className="w-full h-12 pl-[42px] pr-3 bg-[#fbfaf7] border border-[#ddd9d1] rounded-xl outline-none text-sm" disabled={loading}/></div>
+            <label className="block text-xs font-bold text-[#617265] mb-2">Email *</label>
+            <div className="relative"><Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-[#9ba69a]"/><input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" className="w-full h-12 pl-[42px] pr-3 bg-[#fafbf8] border border-[#dce3da] rounded-xl outline-none text-sm" disabled={loading}/></div>
           </div>
           <div>
-            <label className="block text-xs font-bold text-[#5f5c6d] mb-2">Phone</label>
-            <div className="relative"><Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-[#aaa6b2]"/><input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="01XXXXXXXXX" className="w-full h-12 pl-[42px] pr-3 bg-[#fbfaf7] border border-[#ddd9d1] rounded-xl outline-none text-sm" disabled={loading}/></div>
+            <label className="block text-xs font-bold text-[#617265] mb-2">Phone</label>
+            <div className="relative"><Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-[#9ba69a]"/><input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="01XXXXXXXXX" className="w-full h-12 pl-[42px] pr-3 bg-[#fafbf8] border border-[#dce3da] rounded-xl outline-none text-sm" disabled={loading}/></div>
           </div>
         </div>
 
         <div>
-          <label className="block text-xs font-bold text-[#5f5c6d] mb-2">Short bio <span className="font-medium text-[#aaa6b2]">(optional)</span></label>
-          <textarea value={bio} onChange={e => setBio(e.target.value)} placeholder="Subjects you teach, experience, etc." rows={2} className="w-full px-3.5 py-3 bg-[#fbfaf7] border border-[#ddd9d1] rounded-xl outline-none text-sm resize-none" disabled={loading}/>
+          <label className="block text-xs font-bold text-[#617265] mb-2">Short bio <span className="font-medium text-[#9ba69a]">(optional)</span></label>
+          <textarea value={bio} onChange={e => setBio(e.target.value)} placeholder="Subjects you teach, experience, etc." rows={2} className="w-full px-3.5 py-3 bg-[#fafbf8] border border-[#dce3da] rounded-xl outline-none text-sm resize-none" disabled={loading}/>
         </div>
 
         <div>
-          <label className="block text-xs font-bold text-[#5f5c6d] mb-2">Password *</label>
-          <div className="relative"><LockKeyhole className="absolute left-3.5 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-[#aaa6b2]"/><input type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} placeholder="Minimum 6 characters" className="w-full h-12 pl-[42px] pr-11 bg-[#fbfaf7] border border-[#ddd9d1] rounded-xl outline-none text-sm" disabled={loading}/><button type="button" onClick={() => setShowPassword(v => !v)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#aaa6b2] hover:text-[#5b5783]">{showPassword ? <EyeOff className="w-[18px] h-[18px]"/> : <Eye className="w-[18px] h-[18px]"/>}</button></div>
+          <label className="block text-xs font-bold text-[#617265] mb-2">Password *</label>
+          <div className="relative"><LockKeyhole className="absolute left-3.5 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-[#9ba69a]"/><input type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} placeholder="Minimum 6 characters" className="w-full h-12 pl-[42px] pr-11 bg-[#fafbf8] border border-[#dce3da] rounded-xl outline-none text-sm" disabled={loading}/><button type="button" onClick={() => setShowPassword(v => !v)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#9ba69a] hover:text-[#53715d]">{showPassword ? <EyeOff className="w-[18px] h-[18px]"/> : <Eye className="w-[18px] h-[18px]"/>}</button></div>
         </div>
 
         <div>
-          <label className="block text-xs font-bold text-[#5f5c6d] mb-2">Confirm password *</label>
-          <div className="relative"><LockKeyhole className="absolute left-3.5 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-[#aaa6b2]"/><input type={showPassword ? 'text' : 'password'} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Repeat password" className="w-full h-12 pl-[42px] pr-4 bg-[#fbfaf7] border border-[#ddd9d1] rounded-xl outline-none text-sm" disabled={loading}/></div>
+          <label className="block text-xs font-bold text-[#617265] mb-2">Confirm password *</label>
+          <div className="relative"><LockKeyhole className="absolute left-3.5 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-[#9ba69a]"/><input type={showPassword ? 'text' : 'password'} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Repeat password" className="w-full h-12 pl-[42px] pr-4 bg-[#fafbf8] border border-[#dce3da] rounded-xl outline-none text-sm" disabled={loading}/></div>
         </div>
 
         <Button type="submit" size="lg" disabled={loading} className="w-full mt-1">{loading ? 'Creating account…' : <>Create account <ArrowRight className="w-4 h-4"/></>}</Button>
       </form>
 
-      <button type="button" onClick={onSwitchToLogin} className="mt-5 w-full flex items-center justify-center gap-2 text-sm font-bold text-[#5a568f] hover:text-[#35326e]" disabled={loading}><ArrowLeft className="w-4 h-4"/> Already have an account? Sign in</button>
+      <button type="button" onClick={onSwitchToLogin} className="mt-5 w-full flex items-center justify-center gap-2 text-sm font-bold text-[#386c54] hover:text-[#285944]" disabled={loading}><ArrowLeft className="w-4 h-4"/> Already have an account? Sign in</button>
     </AuthShell>
   );
 };

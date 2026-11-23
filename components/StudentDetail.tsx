@@ -27,21 +27,21 @@ export const StudentDetail: React.FC<StudentDetailProps> = ({ student, onBack, o
     <div className="max-w-5xl mx-auto space-y-5">
       <Button variant="ghost" size="sm" onClick={onBack} icon={<ArrowLeft className="w-4 h-4" />}>Dashboard</Button>
 
-      <section className="tt-card rounded-[26px] overflow-hidden">
+      <section className="tt-card rounded-2xl overflow-hidden">
         <div className="p-5 sm:p-7">
           <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
             <div className="flex items-start gap-4 min-w-0">
-              <div className="h-14 w-14 rounded-[18px] bg-[#ece9f6] text-[#4d4982] grid place-items-center font-extrabold shrink-0">{initials}</div>
+              <div className="h-14 w-14 rounded-[18px] bg-[#ebf0e8] text-[#35644b] grid place-items-center font-semibold shrink-0">{initials}</div>
               <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h1 className="text-2xl font-extrabold tracking-[-.04em] text-[#29283f]">{student.name}</h1>
-                  <span className={`px-2.5 py-1 rounded-full text-[10px] uppercase tracking-[.08em] font-extrabold ${student.active ? 'bg-[#edf7f1] text-[#397d5c]' : 'bg-[#f0eef1] text-[#777481]'}`}>{student.active ? 'Active' : 'Inactive'}</span>
+                  <h1 className="tt-display text-[33px] tracking-[-.03em] text-[#293e30]">{student.name}</h1>
+                  <span className={`px-2.5 py-1 rounded-full text-[10px] normal-case tracking-normal font-semibold ${student.active ? 'bg-[#edf7f1] text-[#397d5c]' : 'bg-[#eef3eb] text-[#777481]'}`}>{student.active ? 'Active' : 'Inactive'}</span>
                 </div>
                 <p className="mt-1 text-sm text-[#807d8c]">{student.subject} · {monthlyRateLabel(student)}</p>
                 <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs text-[#7d7a89]">
-                  <span className="inline-flex items-center gap-1.5"><CalendarDays className="w-3.5 h-3.5 text-[#69659b]" /> {student.scheduleDays.join(' · ')}</span>
-                  <span className="inline-flex items-center gap-1.5"><Clock3 className="w-3.5 h-3.5 text-[#69659b]" /> {student.scheduleTime}</span>
-                  {student.email && <span className="inline-flex items-center gap-1.5"><Mail className="w-3.5 h-3.5 text-[#69659b]" /> {student.email}</span>}
+                  <span className="inline-flex items-center gap-1.5"><CalendarDays className="w-3.5 h-3.5 text-[#537761]" /> {student.scheduleDays.join(' · ')}</span>
+                  <span className="inline-flex items-center gap-1.5"><Clock3 className="w-3.5 h-3.5 text-[#537761]" /> {student.scheduleTime}</span>
+                  {student.email && <span className="inline-flex items-center gap-1.5"><Mail className="w-3.5 h-3.5 text-[#537761]" /> {student.email}</span>}
                 </div>
               </div>
             </div>
@@ -55,71 +55,71 @@ export const StudentDetail: React.FC<StudentDetailProps> = ({ student, onBack, o
           </div>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 border-t border-[#eeece6] bg-[#fbfaf7]">
+        <div className="grid grid-cols-2 lg:grid-cols-4 border-t border-[#e9eee7] bg-[#fafbf8]">
           {[
             ['Completed', completedSessions.toString()],
             ['Total billed', `৳${totalDue.toLocaleString()}`],
             ['Collected', `৳${totalPaid.toLocaleString()}`],
             ['Outstanding', `৳${balance.toLocaleString()}`],
           ].map(([label, value], i) => (
-            <div key={label} className={`p-4 sm:p-5 ${i % 2 === 0 ? 'border-r border-[#eeece6]' : ''} lg:border-r lg:last:border-r-0 border-b lg:border-b-0 border-[#eeece6]`}>
-              <p className="text-[10px] font-bold uppercase tracking-[.12em] text-[#9b98a5]">{label}</p>
-              <p className={`mt-1.5 text-lg font-extrabold tracking-[-.03em] ${label === 'Outstanding' && balance > 0 ? 'text-[#ad5348]' : 'text-[#343247]'}`}>{value}</p>
+            <div key={label} className={`p-4 sm:p-5 ${i % 2 === 0 ? 'border-r border-[#e9eee7]' : ''} lg:border-r lg:last:border-r-0 border-b lg:border-b-0 border-[#e9eee7]`}>
+              <p className="text-[10px] font-bold normal-case tracking-normal text-[#7a8f7c]">{label}</p>
+              <p className={`mt-1.5 text-lg font-semibold tracking-[-.03em] ${label === 'Outstanding' && balance > 0 ? 'text-[#ad5348]' : 'text-[#303f33]'}`}>{value}</p>
             </div>
           ))}
         </div>
       </section>
 
       {billing.currentMode !== 'legacy' && (
-        <div className="tt-card rounded-[22px] px-5 py-4 border border-[#e7e2d9] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="tt-card rounded-2xl px-5 py-4 border border-[#e7e2d9] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            <p className="text-xs font-extrabold text-[#39354c]">Current month's billing</p>
+            <p className="text-xs font-semibold text-[#303f33]">Current month's billing</p>
             <p className="mt-1 text-xs text-[#817c8a]">
               {billing.currentMode === 'session-target'
                 ? `${billing.currentMonthSessions} of ${billing.currentMonthTarget} completed sessions · ${billing.currentMonthComplete ? 'Monthly target reached' : 'In progress'}`
                 : `${billing.currentMonthSessions} sessions recorded · Monthly fee becomes due after month-end`}
             </p>
           </div>
-          <p className="text-lg font-extrabold text-[#4e4a82]">৳{billing.currentMonthEarned.toLocaleString('en-BD', { maximumFractionDigits: 2 })} billed this month</p>
+          <p className="text-lg font-semibold text-[#386c54]">৳{billing.currentMonthEarned.toLocaleString('en-BD', { maximumFractionDigits: 2 })} billed this month</p>
         </div>
       )}
 
-      <section className="tt-card rounded-[24px] overflow-hidden">
+      <section className="tt-card rounded-2xl overflow-hidden">
         <div className="px-4 sm:px-6 pt-4 border-b border-[#ece9e3] flex gap-6">
-          <button onClick={() => setActiveTab('sessions')} className={`pb-3.5 text-sm font-bold border-b-2 transition-colors ${activeTab === 'sessions' ? 'border-[#55518f] text-[#3f3b72]' : 'border-transparent text-[#8d8998] hover:text-[#555261]'}`}>Sessions <span className="ml-1 text-xs opacity-60">{student.sessions.length}</span></button>
-          <button onClick={() => setActiveTab('payments')} className={`pb-3.5 text-sm font-bold border-b-2 transition-colors ${activeTab === 'payments' ? 'border-[#55518f] text-[#3f3b72]' : 'border-transparent text-[#8d8998] hover:text-[#555261]'}`}>Payments <span className="ml-1 text-xs opacity-60">{student.payments.length}</span></button>
+          <button onClick={() => setActiveTab('sessions')} className={`pb-3.5 text-sm font-bold border-b-2 transition-colors ${activeTab === 'sessions' ? 'border-[#386c54] text-[#295b49]' : 'border-transparent text-[#859286] hover:text-[#576a5b]'}`}>Sessions <span className="ml-1 text-xs opacity-60">{student.sessions.length}</span></button>
+          <button onClick={() => setActiveTab('payments')} className={`pb-3.5 text-sm font-bold border-b-2 transition-colors ${activeTab === 'payments' ? 'border-[#386c54] text-[#295b49]' : 'border-transparent text-[#859286] hover:text-[#576a5b]'}`}>Payments <span className="ml-1 text-xs opacity-60">{student.payments.length}</span></button>
         </div>
 
         {activeTab === 'sessions' ? (
-          <div className="divide-y divide-[#efede7]">
+          <div className="divide-y divide-[#e9eee7]">
             {student.sessions.length === 0 ? (
               <EmptyHistory icon={<CalendarDays className="w-5 h-5" />} title="No sessions yet" copy="Log the first class when you finish teaching." action="Log session" onAction={onLogSession} />
             ) : [...student.sessions].sort((a,b) => +new Date(b.date) - +new Date(a.date)).map(session => (
-              <div key={session.id} className="p-4 sm:px-6 sm:py-5 flex items-center justify-between gap-4 hover:bg-[#fbfaf7] transition-colors">
+              <div key={session.id} className="p-4 sm:px-6 sm:py-5 flex items-center justify-between gap-4 hover:bg-[#fafbf8] transition-colors">
                 <div className="flex items-start gap-3 min-w-0">
-                  <div className={`h-9 w-9 rounded-xl grid place-items-center shrink-0 ${session.status === 'completed' ? 'bg-[#edf7f1] text-[#438164]' : session.status === 'missed' ? 'bg-[#fff1ee] text-[#b2584d]' : 'bg-[#f0eef1] text-[#7c7885]'}`}>
+                  <div className={`h-9 w-9 rounded-xl grid place-items-center shrink-0 ${session.status === 'completed' ? 'bg-[#edf7f1] text-[#438164]' : session.status === 'missed' ? 'bg-[#fff1ee] text-[#b2584d]' : 'bg-[#eef3eb] text-[#7c7885]'}`}>
                     {session.status === 'completed' ? <CheckCircle2 className="w-4 h-4"/> : session.status === 'missed' ? <AlertCircle className="w-4 h-4"/> : <XCircle className="w-4 h-4"/>}
                   </div>
                   <div className="min-w-0">
-                    <p className="text-sm font-bold text-[#37354a]">{new Date(session.date).toLocaleDateString(undefined, { weekday:'short', year:'numeric', month:'short', day:'numeric' })}</p>
+                    <p className="text-sm font-bold text-[#303f33]">{new Date(session.date).toLocaleDateString(undefined, { weekday:'short', year:'numeric', month:'short', day:'numeric' })}</p>
                     <p className="mt-0.5 text-xs text-[#8e8a98] truncate">{session.notes || `${session.status.charAt(0).toUpperCase() + session.status.slice(1)} session`}</p>
                   </div>
                 </div>
-                <div className="text-right shrink-0"><p className="text-sm font-bold text-[#454255]">{session.durationMinutes} min</p><p className="mt-0.5 text-[10px] uppercase tracking-[.09em] font-bold text-[#aaa7b0]">{session.status}</p></div>
+                <div className="text-right shrink-0"><p className="text-sm font-bold text-[#293c30]">{session.durationMinutes} min</p><p className="mt-0.5 text-[10px] normal-case tracking-normal font-bold text-[#aaa7b0]">{session.status}</p></div>
               </div>
             ))}
           </div>
         ) : (
-          <div className="divide-y divide-[#efede7]">
+          <div className="divide-y divide-[#e9eee7]">
             {student.payments.length === 0 ? (
               <EmptyHistory icon={<CircleDollarSign className="w-5 h-5" />} title="No payments yet" copy="Record a payment when this student pays you." action="Record payment" onAction={onLogPayment} />
             ) : [...student.payments].sort((a,b) => +new Date(b.date) - +new Date(a.date)).map(payment => (
-              <div key={payment.id} className="p-4 sm:px-6 sm:py-5 flex items-center justify-between gap-4 hover:bg-[#fbfaf7] transition-colors">
+              <div key={payment.id} className="p-4 sm:px-6 sm:py-5 flex items-center justify-between gap-4 hover:bg-[#fafbf8] transition-colors">
                 <div className="flex items-start gap-3 min-w-0">
                   <div className="h-9 w-9 rounded-xl bg-[#edf7f1] text-[#438164] grid place-items-center shrink-0"><WalletCards className="w-4 h-4"/></div>
-                  <div className="min-w-0"><p className="text-sm font-bold text-[#37354a]">{new Date(payment.date).toLocaleDateString(undefined, { year:'numeric', month:'short', day:'numeric' })}</p><p className="mt-0.5 text-xs text-[#8e8a98] truncate">{payment.notes || 'Payment received'}</p></div>
+                  <div className="min-w-0"><p className="text-sm font-bold text-[#303f33]">{new Date(payment.date).toLocaleDateString(undefined, { year:'numeric', month:'short', day:'numeric' })}</p><p className="mt-0.5 text-xs text-[#8e8a98] truncate">{payment.notes || 'Payment received'}</p></div>
                 </div>
-                <p className="text-sm font-extrabold text-[#347a59] shrink-0">+৳{payment.amount.toLocaleString()}</p>
+                <p className="text-sm font-semibold text-[#347a59] shrink-0">+৳{payment.amount.toLocaleString()}</p>
               </div>
             ))}
           </div>
@@ -131,8 +131,8 @@ export const StudentDetail: React.FC<StudentDetailProps> = ({ student, onBack, o
 
 const EmptyHistory: React.FC<{icon: React.ReactNode; title:string; copy:string; action:string; onAction:()=>void}> = ({ icon, title, copy, action, onAction }) => (
   <div className="px-6 py-12 text-center">
-    <div className="h-12 w-12 rounded-2xl bg-[#f1efe8] text-[#777386] grid place-items-center mx-auto">{icon}</div>
-    <p className="mt-3 font-extrabold text-[#3b394e]">{title}</p>
+    <div className="h-12 w-12 rounded-2xl bg-[#f1efe8] text-[#576a5b] grid place-items-center mx-auto">{icon}</div>
+    <p className="mt-3 font-semibold text-[#293c30]">{title}</p>
     <p className="mt-1 text-sm text-[#918e9a]">{copy}</p>
     <Button size="sm" variant="secondary" className="mt-4" onClick={onAction}>{action}</Button>
   </div>
